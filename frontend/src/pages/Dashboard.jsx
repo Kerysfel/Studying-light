@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getErrorMessage, request } from "../api.js";
@@ -11,33 +11,37 @@ const Dashboard = () => {
     () => sessionStorage.getItem("summaryDismissed") !== "true"
   );
 
+  const load = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await request("/today");
+      setToday(data);
+      setError("");
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     let active = true;
-    const load = async () => {
-      try {
-        setLoading(true);
-        const data = await request("/today");
-        if (!active) {
-          return;
-        }
-        setToday(data);
-        setError("");
-      } catch (err) {
-        if (!active) {
-          return;
-        }
-        setError(getErrorMessage(err));
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
+    const guardedLoad = async () => {
+      if (!active) {
+        return;
       }
+      await load();
     };
-    load();
+    guardedLoad();
+    const handleRefresh = () => {
+      guardedLoad();
+    };
+    window.addEventListener("dashboard:refresh", handleRefresh);
     return () => {
       active = false;
+      window.removeEventListener("dashboard:refresh", handleRefresh);
     };
-  }, []);
+  }, [load]);
 
   const activeBooks = today?.active_books || [];
   const reviewItems = today?.review_items || [];
