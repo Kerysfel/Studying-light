@@ -5,6 +5,8 @@ UVICORN_HOST="${UVICORN_HOST:-0.0.0.0}"
 UVICORN_PORT="${UVICORN_PORT:-8000}"
 UVICORN_LOG_LEVEL="${UVICORN_LOG_LEVEL:-info}"
 
+uv run alembic upgrade head
+
 exec uv run uvicorn studying_light.main:app \
   --host "$UVICORN_HOST" \
   --port "$UVICORN_PORT" \

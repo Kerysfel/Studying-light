@@ -52,6 +52,31 @@ export const request = async (path, options = {}) => {
   return data;
 };
 
+export const requestText = async (path, options = {}) => {
+  let response;
+  try {
+    response = await fetch(path, {
+      headers: {
+        ...(options.headers || {}),
+      },
+      ...options,
+    });
+  } catch (error) {
+    throw { detail: "Ошибка сети", code: "NETWORK_ERROR", errors: null };
+  }
+  const text = await response.text();
+  if (!response.ok) {
+    let payload = null;
+    try {
+      payload = JSON.parse(text);
+    } catch (err) {
+      payload = null;
+    }
+    throw normalizeError(response.status, payload);
+  }
+  return text;
+};
+
 export const getErrorMessage = (error) => {
   if (!error) {
     return "Неизвестная ошибка.";

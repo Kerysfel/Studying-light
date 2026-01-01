@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 
-import { getErrorMessage, request } from "../api.js";
+import { getErrorMessage, request, requestText } from "../api.js";
 
 const Reviews = () => {
   const [items, setItems] = useState([]);
@@ -16,6 +16,8 @@ const Reviews = () => {
   const [showPrompt, setShowPrompt] = useState(false);
   const [copied, setCopied] = useState(false);
   const [feedbackSaving, setFeedbackSaving] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptTemplate, setPromptTemplate] = useState("");
 
   useEffect(() => {
     let active = true;
@@ -93,21 +95,27 @@ const Reviews = () => {
   }, [questions, answers]);
 
   const buildCheckPrompt = () => {
-    const lines = [
-      "Проверь ответы пользователя на вопросы по чтению.",
-      "",
-      "Сводка:",
-      detail?.summary || "-",
-      "",
-      "Вопросы и ответы:",
-    ];
-    questions.forEach((question, index) => {
-      lines.push(`Вопрос: ${question}`);
-      lines.push(`Ответ: ${answers[index] || "-"}`);
-      lines.push("");
+    if (!promptTemplate || !detail) {
+      return "";
+    }
+    const qaBlock = questions
+      .map((question, index) => {
+        const answer = answers[index] || "-";
+        return `Вопрос: ${question}\nОтвет: ${answer}`;
+      })
+      .join("\n\n");
+    const replacements = {
+      book_title: detail.book_title || "-",
+      part_index: String(detail.part_index || "-"),
+      label: detail.label || "-",
+      summary: detail.summary || "-",
+      qa_block: qaBlock || "-",
+    };
+    let rendered = promptTemplate;
+    Object.entries(replacements).forEach(([key, value]) => {
+      rendered = rendered.replaceAll(`{{${key}}}`, value);
     });
-    lines.push("Сделай краткую оценку и перечисли ошибки.");
-    return lines.join("\n");
+    return rendered;
   };
 
   const handleCopyPrompt = async () => {
@@ -117,6 +125,27 @@ const Reviews = () => {
       setTimeout(() => setCopied(false), 1600);
     } catch (err) {
       setActionError("Не удалось скопировать текст.");
+    }
+  };
+
+  const openCheckPrompt = async () => {
+    if (!detail) {
+      setActionError("Выберите повторение.");
+      return;
+    }
+    setCopied(false);
+    setActionError("");
+    try {
+      setPromptLoading(true);
+      if (!promptTemplate) {
+        const template = await requestText("/prompts/check_answers");
+        setPromptTemplate(template);
+      }
+      setShowPrompt(true);
+    } catch (err) {
+      setActionError(getErrorMessage(err));
+    } finally {
+      setPromptLoading(false);
     }
   };
 
@@ -248,7 +277,7 @@ const Reviews = () => {
             </div>
 
             <div className="form-actions">
-              <button className="ghost-button" type="button" onClick={() => setShowPrompt(true)}>
+              <button className="ghost-button" type="button" onClick={openCheckPrompt}>
                 Сгенерировать промпт проверки
               </button>
               <button className="primary-button" type="button" onClick={handleComplete}>
@@ -292,9 +321,23 @@ const Reviews = () => {
               </button>
             </div>
             <div className="modal-body">
-              <textarea className="prompt-area" rows="10" value={buildCheckPrompt()} readOnly />
+              {promptLoading ? (
+                <p className="muted">Подготовка промпта...</p>
+              ) : (
+                <textarea
+                  className="prompt-area"
+                  rows="10"
+                  value={buildCheckPrompt()}
+                  readOnly
+                />
+              )}
               <div className="modal-actions">
-                <button className="primary-button" type="button" onClick={handleCopyPrompt}>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={handleCopyPrompt}
+                  disabled={promptLoading || !buildCheckPrompt()}
+                >
                   {copied ? "Скопировано" : "Копировать"}
                 </button>
               </div>

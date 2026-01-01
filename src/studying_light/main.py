@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
+from studying_light.api.prompts import router as prompts_router
 from studying_light.api.v1.router import router as api_v1_router
 
 logger = logging.getLogger(__name__)
@@ -136,12 +137,18 @@ def health() -> dict[str, str]:
 
 
 app.include_router(api_v1_router)
+app.include_router(prompts_router)
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
 def spa_fallback(full_path: str) -> FileResponse:
     """Serve the SPA for non-API routes."""
-    if full_path == "api" or full_path.startswith("api/"):
+    if (
+        full_path == "api"
+        or full_path.startswith("api/")
+        or full_path == "prompts"
+        or full_path.startswith("prompts/")
+    ):
         raise HTTPException(
             status_code=404,
             detail={"detail": "Not Found", "code": "NOT_FOUND"},

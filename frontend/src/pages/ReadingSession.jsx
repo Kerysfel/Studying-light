@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
-import { getErrorMessage, request } from "../api.js";
+import { getErrorMessage, request, requestText } from "../api.js";
 
 const TOTAL_CYCLES = 4;
 
@@ -54,6 +54,9 @@ const ReadingSession = () => {
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptText, setPromptText] = useState("");
+  const [promptPartIndex, setPromptPartIndex] = useState(null);
 
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
   const [pomodoroMode, setPomodoroMode] = useState("work");
@@ -214,34 +217,32 @@ const ReadingSession = () => {
   };
 
   const buildPrompt = () => {
+    if (!promptText) {
+      return "";
+    }
     const termLines = parseTerms(terms).map(
-      (item) => `${item.term}${item.definition ? ` — ${item.definition}` : ""}`
+      (item) => `${item.term}${item.definition ? ` - ${item.definition}` : ""}`
     );
-    return [
-      "Сводка чтения",
-      selectedBookTitle ? `Книга: ${selectedBookTitle}` : null,
-      label.trim() ? `Метка части: ${label.trim()}` : null,
-      "",
-      "Ключевые слова:",
-      keywords
+    const replacements = {
+      book_title: selectedBookTitle || "-",
+      part_index: promptPartIndex ? String(promptPartIndex) : "-",
+      label: label.trim() || "-",
+      keywords: keywords
         ? keywords
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean)
             .join(", ")
         : "-",
-      "",
-      "Термины:",
-      termLines.length > 0 ? termLines.join("\n") : "-",
-      "",
-      "Важные предложения:",
-      splitLines(sentences).join("\n") || "-",
-      "",
-      "Свободные заметки:",
-      splitLines(freeform).join("\n") || "-",
-    ]
-      .filter((line) => line !== null)
-      .join("\n");
+      terms: termLines.length > 0 ? termLines.join("\n") : "-",
+      sentences: splitLines(sentences).join("\n") || "-",
+      freeform: splitLines(freeform).join("\n") || "-",
+    };
+    let rendered = promptText;
+    Object.entries(replacements).forEach(([key, value]) => {
+      rendered = rendered.replaceAll(`{{${key}}}`, value);
+    });
+    return rendered;
   };
 
   const handleCopyPrompt = async (text) => {
@@ -254,9 +255,31 @@ const ReadingSession = () => {
     }
   };
 
-  const openPromptModal = () => {
+  const openPromptModal = async () => {
     setCopied(false);
-    setShowPromptModal(true);
+    setError("");
+    if (!selectedBook) {
+      setError("Выберите книгу для сессии.");
+      return;
+    }
+    try {
+      setPromptLoading(true);
+      const [template, parts] = await Promise.all([
+        requestText("/prompts/generate_summary_and_questions"),
+        request(`/parts?book_id=${selectedBook}`),
+      ]);
+      const maxIndex = parts.reduce(
+        (maxValue, item) => Math.max(maxValue, item.part_index),
+        0
+      );
+      setPromptPartIndex(maxIndex + 1);
+      setPromptText(template);
+      setShowPromptModal(true);
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setPromptLoading(false);
+    }
   };
 
   const handleSaveSession = async () => {
@@ -556,17 +579,22 @@ const ReadingSession = () => {
               </button>
             </div>
             <div className="modal-body">
-              <textarea
-                className="prompt-area"
-                rows="10"
-                value={buildPrompt()}
-                readOnly
-              />
+              {promptLoading ? (
+                <p className="muted">Подготовка промпта...</p>
+              ) : (
+                <textarea
+                  className="prompt-area"
+                  rows="10"
+                  value={buildPrompt()}
+                  readOnly
+                />
+              )}
               <div className="modal-actions">
                 <button
                   className="primary-button"
                   type="button"
                   onClick={() => handleCopyPrompt(buildPrompt())}
+                  disabled={promptLoading || !buildPrompt()}
                 >
                   {copied ? "Скопировано" : "Копировать"}
                 </button>
