@@ -6,6 +6,8 @@ from fastapi import FastAPI, HTTPException
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import FileResponse
 
+from studying_light.api.v1.router import router as api_v1_router
+
 app: FastAPI = FastAPI()
 
 STATIC_DIR: Path = Path("/app/static")
@@ -21,6 +23,15 @@ app.mount(
 def index() -> FileResponse:
     """Serve the SPA entrypoint."""
     return FileResponse(STATIC_DIR / "index.html")
+
+
+@app.get("/health")
+def health() -> dict[str, str]:
+    """Return application health status."""
+    return {"status": "ok"}
+
+
+app.include_router(api_v1_router)
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
