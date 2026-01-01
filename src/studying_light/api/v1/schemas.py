@@ -97,6 +97,22 @@ class ReviewItemOut(BaseModel):
     label: str | None = None
 
 
+class ReviewDetailOut(BaseModel):
+    """Review detail response."""
+
+    id: int
+    reading_part_id: int
+    interval_days: int
+    due_date: date
+    status: str
+    book_id: int
+    book_title: str
+    part_index: int
+    label: str | None = None
+    summary: str | None = None
+    questions: list[str]
+
+
 class ReviewCompletePayload(BaseModel):
     """Review completion payload."""
 
@@ -130,3 +146,17 @@ class TodayResponse(BaseModel):
 
     active_books: list[BookOut]
     review_items: list[ReviewItemOut]
+
+
+class SettingsOut(BaseModel):
+    """Settings response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    timezone: str | None = None
+    pomodoro_work_min: int | None = None
+    pomodoro_break_min: int | None = None
+    daily_goal_weekday_min: int | None = None
+    daily_goal_weekend_min: int | None = None
+    intervals_days: list | None = None

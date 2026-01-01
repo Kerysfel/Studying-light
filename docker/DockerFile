@@ -14,13 +14,13 @@ WORKDIR /app
 
 RUN pip install --no-cache-dir uv
 
-COPY pyproject.toml README.md uv.lock /app/
+COPY pyproject.toml README.md uv.lock alembic.ini /app/
 COPY src /app/src
 COPY alembic /app/alembic
 COPY docker/entrypoint.sh /app/entrypoint.sh
 COPY --from=frontend-build /frontend/dist /app/static
 
-RUN uv sync --frozen --no-dev --system
+RUN uv sync --frozen --no-dev
 RUN chmod +x /app/entrypoint.sh
 RUN mkdir -p /data
 

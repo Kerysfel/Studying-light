@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from studying_light.api.v1.schemas import (
     ReviewAttemptOut,
     ReviewCompletePayload,
+    ReviewDetailOut,
     ReviewFeedbackPayload,
     ReviewItemOut,
 )
@@ -56,6 +57,54 @@ def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut
     ).all()
 
     return [_build_review_item_out(item, part, book) for item, part, book in rows]
+
+
+@router.get("/reviews/{review_id}")
+def review_detail(
+    review_id: int,
+    session: Session = Depends(get_session),
+) -> ReviewDetailOut:
+    """Return review details with summary and questions."""
+    review_item = session.get(ReviewScheduleItem, review_id)
+    if not review_item:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Review item not found", "code": "NOT_FOUND"},
+        )
+
+    part = session.get(ReadingPart, review_item.reading_part_id)
+    book = session.get(Book, part.book_id) if part else None
+    if not part or not book:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Related book or part not found", "code": "NOT_FOUND"},
+        )
+
+    questions = review_item.questions or []
+    if not isinstance(questions, list) or any(
+        not isinstance(item, str) for item in questions
+    ):
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": "Некорректный формат вопросов",
+                "code": "VALIDATION_ERROR",
+            },
+        )
+
+    return ReviewDetailOut(
+        id=review_item.id,
+        reading_part_id=review_item.reading_part_id,
+        interval_days=review_item.interval_days,
+        due_date=review_item.due_date,
+        status=review_item.status,
+        book_id=book.id,
+        book_title=book.title,
+        part_index=part.part_index,
+        label=part.label,
+        summary=part.gpt_summary,
+        questions=questions,
+    )
 
 
 @router.post("/reviews/{review_id}/complete")
