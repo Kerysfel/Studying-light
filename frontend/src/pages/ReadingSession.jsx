@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getErrorMessage, request } from "../api.js";
+
+const TOTAL_CYCLES = 4;
 
 const splitLines = (value) =>
   value
@@ -26,6 +28,17 @@ const parseTerms = (value) =>
     })
     .filter((item) => item.term);
 
+const formatClock = (totalSeconds) => {
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  const padded = (value) => String(value).padStart(2, "0");
+  if (hours > 0) {
+    return `${padded(hours)}:${padded(minutes)}:${padded(seconds)}`;
+  }
+  return `${padded(minutes)}:${padded(seconds)}`;
+};
+
 const ReadingSession = () => {
   const [books, setBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState("");
@@ -34,19 +47,41 @@ const ReadingSession = () => {
   const [terms, setTerms] = useState("");
   const [sentences, setSentences] = useState("");
   const [freeform, setFreeform] = useState("");
+  const [activeTab, setActiveTab] = useState("keywords");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [createdPart, setCreatedPart] = useState(null);
+  const [showSaveModal, setShowSaveModal] = useState(false);
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const [pomodoroRunning, setPomodoroRunning] = useState(false);
+  const [pomodoroMode, setPomodoroMode] = useState("work");
+  const [pomodoroSeconds, setPomodoroSeconds] = useState(0);
+  const [cycle, setCycle] = useState(1);
+  const [sessionSeconds, setSessionSeconds] = useState(0);
+  const [settings, setSettings] = useState(null);
+
+  const keywordRef = useRef(null);
+  const termsRef = useRef(null);
+  const sentencesRef = useRef(null);
+  const freeformRef = useRef(null);
 
   useEffect(() => {
     let active = true;
     const load = async () => {
       try {
-        const data = await request("/books");
+        const [booksData, settingsData] = await Promise.all([
+          request("/books"),
+          request("/settings"),
+        ]);
         if (!active) {
           return;
         }
-        setBooks(data);
+        setBooks(booksData);
+        setSettings(settingsData);
+        const workMinutes = settingsData?.pomodoro_work_min || 25;
+        setPomodoroSeconds(workMinutes * 60);
       } catch (err) {
         if (!active) {
           return;
@@ -60,15 +95,175 @@ const ReadingSession = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!pomodoroRunning || pomodoroSeconds <= 0) {
+      return undefined;
+    }
+    const timerId = setInterval(() => {
+      setPomodoroSeconds((prev) => prev - 1);
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [pomodoroRunning, pomodoroSeconds]);
+
+  useEffect(() => {
+    if (!pomodoroRunning) {
+      return;
+    }
+    const timerId = setInterval(() => {
+      setSessionSeconds((prev) => prev + 1);
+    }, 1000);
+    return () => clearInterval(timerId);
+  }, [pomodoroRunning]);
+
+  useEffect(() => {
+    if (!pomodoroRunning || pomodoroSeconds > 0) {
+      return;
+    }
+    const workMinutes = settings?.pomodoro_work_min || 25;
+    const breakMinutes = settings?.pomodoro_break_min || 5;
+    if (pomodoroMode === "work") {
+      if (cycle >= TOTAL_CYCLES) {
+        setPomodoroRunning(false);
+        return;
+      }
+      setPomodoroMode("break");
+      setPomodoroSeconds(breakMinutes * 60);
+      return;
+    }
+    setPomodoroMode("work");
+    setPomodoroSeconds(workMinutes * 60);
+    setCycle((prev) => Math.min(prev + 1, TOTAL_CYCLES));
+  }, [pomodoroSeconds, pomodoroRunning, pomodoroMode, cycle, settings]);
+
+  useEffect(() => {
+    const refMap = {
+      keywords: keywordRef,
+      terms: termsRef,
+      sentences: sentencesRef,
+      freeform: freeformRef,
+    };
+    const ref = refMap[activeTab];
+    if (ref?.current) {
+      ref.current.focus();
+    }
+  }, [activeTab]);
+
   const activeBooks = useMemo(
     () => books.filter((book) => book.status !== "archived"),
     [books]
   );
 
-  const handleCloseSession = async () => {
+  const selectedBookTitle = useMemo(() => {
+    const book = books.find((item) => String(item.id) === selectedBook);
+    return book ? book.title : "";
+  }, [books, selectedBook]);
+
+  const sessionGoalMinutes = useMemo(() => {
+    const day = new Date().getDay();
+    const isWeekend = day === 0 || day === 6;
+    const weekdayGoal = settings?.daily_goal_weekday_min || 40;
+    const weekendGoal = settings?.daily_goal_weekend_min || 60;
+    return isWeekend ? weekendGoal : weekdayGoal;
+  }, [settings]);
+
+  const progressRatio = sessionGoalMinutes
+    ? sessionSeconds / (sessionGoalMinutes * 60)
+    : 0;
+  const progressPercent = Math.min(progressRatio * 100, 100);
+  let goalClass = "goal-low";
+  if (progressRatio >= 1) {
+    goalClass = "goal-high";
+  } else if (progressRatio >= 0.5) {
+    goalClass = "goal-mid";
+  }
+
+  const tabItems = [
+    { key: "keywords", label: "Ключевые слова" },
+    { key: "terms", label: "Термины" },
+    { key: "sentences", label: "Важные предложения" },
+    { key: "freeform", label: "Свободные заметки" },
+  ];
+
+  const filledTabs = {
+    keywords: keywords.trim().length > 0,
+    terms: terms.trim().length > 0,
+    sentences: sentences.trim().length > 0,
+    freeform: freeform.trim().length > 0,
+  };
+
+  const togglePomodoro = () => {
+    if (pomodoroRunning) {
+      setPomodoroRunning(false);
+      return;
+    }
+    if (pomodoroSeconds === 0) {
+      const workMinutes = settings?.pomodoro_work_min || 25;
+      setPomodoroMode("work");
+      setPomodoroSeconds(workMinutes * 60);
+      setCycle(1);
+    }
+    setPomodoroRunning(true);
+  };
+
+  const resetPomodoro = () => {
+    const workMinutes = settings?.pomodoro_work_min || 25;
+    setPomodoroRunning(false);
+    setPomodoroMode("work");
+    setPomodoroSeconds(workMinutes * 60);
+    setCycle(1);
+  };
+
+  const buildPrompt = () => {
+    const termLines = parseTerms(terms).map(
+      (item) => `${item.term}${item.definition ? ` — ${item.definition}` : ""}`
+    );
+    return [
+      "Сводка чтения",
+      selectedBookTitle ? `Книга: ${selectedBookTitle}` : null,
+      label.trim() ? `Метка части: ${label.trim()}` : null,
+      "",
+      "Ключевые слова:",
+      keywords
+        ? keywords
+            .split(",")
+            .map((item) => item.trim())
+            .filter(Boolean)
+            .join(", ")
+        : "-",
+      "",
+      "Термины:",
+      termLines.length > 0 ? termLines.join("\n") : "-",
+      "",
+      "Важные предложения:",
+      splitLines(sentences).join("\n") || "-",
+      "",
+      "Свободные заметки:",
+      splitLines(freeform).join("\n") || "-",
+    ]
+      .filter((line) => line !== null)
+      .join("\n");
+  };
+
+  const handleCopyPrompt = async (text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1600);
+    } catch (err) {
+      setError("Не удалось скопировать текст.");
+    }
+  };
+
+  const openPromptModal = () => {
+    setCopied(false);
+    setShowPromptModal(true);
+  };
+
+  const handleSaveSession = async () => {
     setError("");
     if (!selectedBook) {
       setError("Выберите книгу для сессии.");
+      setShowSaveModal(false);
       return;
     }
 
@@ -94,11 +289,25 @@ const ReadingSession = () => {
       });
       setCreatedPart(part);
       localStorage.setItem("lastPartId", String(part.id));
+      setShowSaveModal(false);
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleDeleteSession = () => {
+    setSelectedBook("");
+    setLabel("");
+    setKeywords("");
+    setTerms("");
+    setSentences("");
+    setFreeform("");
+    setCreatedPart(null);
+    setSessionSeconds(0);
+    resetPomodoro();
+    setShowSaveModal(false);
   };
 
   return (
@@ -107,20 +316,49 @@ const ReadingSession = () => {
         <div className="panel-header">
           <div>
             <h2>Сессия чтения</h2>
-            <p className="muted">Одна глава, одна чистая часть.</p>
+            <p className="muted">Помодоро и общий таймер сессии.</p>
           </div>
-          <span className="badge">Помодоро</span>
+          <span className="badge">
+            {pomodoroMode === "work" ? "Фокус" : "Перерыв"}
+          </span>
         </div>
-        <div className="timer-card">
-          <div className="timer-count">00:25:00</div>
-          <div className="timer-meta">Рабочий цикл 1 из 4</div>
-          <div className="timer-actions">
-            <button className="primary-button" type="button">
-              Старт
-            </button>
-            <button className="ghost-button" type="button">
-              Сброс
-            </button>
+        <div className="timer-grid">
+          <div className="timer-card">
+            <div className="timer-count">{formatClock(pomodoroSeconds)}</div>
+            <div className="timer-meta">
+              Цикл {cycle} из {TOTAL_CYCLES}
+            </div>
+            <div className="timer-actions">
+              <button className="primary-button" type="button" onClick={togglePomodoro}>
+                {pomodoroRunning ? "Пауза" : "Старт"}
+              </button>
+              <button className="ghost-button" type="button" onClick={resetPomodoro}>
+                Сброс
+              </button>
+            </div>
+          </div>
+
+          <div className="session-card">
+            <div className="session-title">Таймер сессии</div>
+            <div className="session-time">
+              {formatClock(sessionSeconds)} / {sessionGoalMinutes} мин
+            </div>
+            <div className={`goal-indicator ${goalClass}`}>
+              <div className="goal-label">
+                Цель на день: {sessionGoalMinutes} минут
+              </div>
+              <div className="progress-track">
+                <div
+                  className="progress-bar"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </div>
+            </div>
+            <div className="session-hint">
+              {progressRatio >= 1
+                ? "Цель выполнена. Можно закончить на сегодня."
+                : "Двигайтесь маленькими блоками, это работает."}
+            </div>
           </div>
         </div>
       </section>
@@ -164,55 +402,91 @@ const ReadingSession = () => {
               placeholder="Например, Гл. 3-4"
             />
           </div>
-          <div className="form-block">
-            <label>Ключевые слова</label>
-            <input
-              value={keywords}
-              onChange={(event) => setKeywords(event.target.value)}
-              placeholder="слово, слово"
-            />
-          </div>
-          <div className="form-block">
-            <label>Термины (каждый с новой строки)</label>
-            <textarea
-              rows="3"
-              value={terms}
-              onChange={(event) => setTerms(event.target.value)}
-              placeholder={"Термин — определение"}
-            />
-          </div>
-          <div className="form-block full">
-            <label>Важные предложения</label>
-            <textarea
-              rows="3"
-              value={sentences}
-              onChange={(event) => setSentences(event.target.value)}
-              placeholder="Одно предложение в строке"
-            />
-          </div>
-          <div className="form-block full">
-            <label>Свободные заметки</label>
-            <textarea
-              rows="3"
-              value={freeform}
-              onChange={(event) => setFreeform(event.target.value)}
-              placeholder="Короткие пункты или фразы"
-            />
-          </div>
         </div>
+
+        <div className="tabs">
+          {tabItems.map((tab) => (
+            <button
+              key={tab.key}
+              className={`tab-button${activeTab === tab.key ? " active" : ""}${
+                filledTabs[tab.key] ? " filled" : ""
+              }`}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="tab-panel">
+          {activeTab === "keywords" && (
+            <div className="form-block full">
+              <label>Ключевые слова</label>
+              <input
+                ref={keywordRef}
+                value={keywords}
+                onChange={(event) => setKeywords(event.target.value)}
+                placeholder="слово, слово"
+              />
+            </div>
+          )}
+          {activeTab === "terms" && (
+            <div className="form-block full">
+              <label>Термины (каждый с новой строки)</label>
+              <textarea
+                rows="5"
+                ref={termsRef}
+                value={terms}
+                onChange={(event) => setTerms(event.target.value)}
+                placeholder="Термин — определение"
+              />
+            </div>
+          )}
+          {activeTab === "sentences" && (
+            <div className="form-block full">
+              <label>Важные предложения</label>
+              <textarea
+                rows="5"
+                ref={sentencesRef}
+                value={sentences}
+                onChange={(event) => setSentences(event.target.value)}
+                placeholder="Одно предложение в строке"
+              />
+            </div>
+          )}
+          {activeTab === "freeform" && (
+            <div className="form-block full">
+              <label>Свободные заметки</label>
+              <textarea
+                rows="5"
+                ref={freeformRef}
+                value={freeform}
+                onChange={(event) => setFreeform(event.target.value)}
+                placeholder="Короткие пункты или фразы"
+              />
+            </div>
+          )}
+        </div>
+
         <div className="form-actions">
-          <button className="ghost-button" type="button">
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={openPromptModal}
+          >
             Сгенерировать промпт
           </button>
           <button
             className="primary-button"
             type="button"
-            onClick={handleCloseSession}
+            onClick={() => setShowSaveModal(true)}
             disabled={saving}
           >
             {saving ? "Сохранение..." : "Закрыть сессию"}
           </button>
         </div>
+
         {createdPart && (
           <div className="success-block">
             <div className="success-title">Часть сохранена</div>
@@ -225,6 +499,82 @@ const ReadingSession = () => {
           </div>
         )}
       </section>
+
+      {showSaveModal && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h2>Закрыть сессию</h2>
+                <p className="muted">
+                  Сохранить часть или удалить заметки без сохранения?
+                </p>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setShowSaveModal(false)}
+              >
+                Отмена
+              </button>
+            </div>
+            <div className="modal-actions">
+              <button
+                className="danger-button"
+                type="button"
+                onClick={handleDeleteSession}
+              >
+                Удалить
+              </button>
+              <button
+                className="primary-button"
+                type="button"
+                onClick={handleSaveSession}
+                disabled={saving}
+              >
+                {saving ? "Сохранение..." : "Сохранить"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPromptModal && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h2>Промпт для GPT</h2>
+                <p className="muted">Скопируйте текст и вставьте в чат.</p>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setShowPromptModal(false)}
+              >
+                Закрыть
+              </button>
+            </div>
+            <div className="modal-body">
+              <textarea
+                className="prompt-area"
+                rows="10"
+                value={buildPrompt()}
+                readOnly
+              />
+              <div className="modal-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => handleCopyPrompt(buildPrompt())}
+                >
+                  {copied ? "Скопировано" : "Копировать"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

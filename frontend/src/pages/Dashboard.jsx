@@ -152,6 +152,38 @@ const Dashboard = () => {
       <section className="panel">
         <div className="panel-header">
           <div>
+            <h2>Повторения на сегодня</h2>
+            <p className="muted">Короткие интервалы закрываются быстрее.</p>
+          </div>
+          <Link className="ghost-button" to="/reviews">
+            Все повторения
+          </Link>
+        </div>
+        {loading && <p className="muted">Загрузка повторений...</p>}
+        {!loading && reviewItems.length === 0 && (
+          <div className="empty-state">На сегодня повторений нет.</div>
+        )}
+        <div className="list">
+          {reviewItems.map((item) => (
+            <div key={item.id} className="list-row">
+              <div>
+                <div className="list-title">{item.book_title}</div>
+                <div className="list-meta">
+                  Часть {item.part_index} · Интервал {item.interval_days} дней ·
+                  До {item.due_date}
+                </div>
+              </div>
+              <Link className="primary-button" to="/reviews">
+                Начать повторение
+              </Link>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
             <h2>Очередь чтения</h2>
             <p className="muted">Активные книги готовы для новой части.</p>
           </div>
