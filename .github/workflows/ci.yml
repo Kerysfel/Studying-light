@@ -38,6 +38,7 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
     steps:
       - uses: actions/checkout@v4
       - run: docker build -f docker/DockerFile -t studying-light:ci .
