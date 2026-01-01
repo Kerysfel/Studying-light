@@ -1,0 +1,21 @@
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+RUN pip install --no-cache-dir uv
+
+COPY pyproject.toml README.md /app/
+COPY uv.lock /app/
+COPY src /app/src
+COPY alembic /app/alembic
+COPY docker/entrypoint.sh /app/entrypoint.sh
+
+RUN uv sync --frozen --no-dev --system
+RUN chmod +x /app/entrypoint.sh
+
+EXPOSE 8000
+
+ENTRYPOINT ["/app/entrypoint.sh"]

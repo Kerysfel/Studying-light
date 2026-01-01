@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security issues
+    url: mailto:newerasowwor@gmail.com
+    about: Please report security vulnerabilities privately.
