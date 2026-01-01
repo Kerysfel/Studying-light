@@ -46,7 +46,10 @@ def create_part(
     """Create a reading part."""
     book = session.get(Book, payload.book_id)
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Book not found", "code": "NOT_FOUND"},
+        )
 
     part_index = payload.part_index
     if part_index is None:
@@ -78,7 +81,10 @@ def list_parts(
 ) -> list[ReadingPartOut]:
     """List reading parts for a book."""
     if book_id is None:
-        raise HTTPException(status_code=400, detail="book_id is required")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "book_id is required", "code": "BAD_REQUEST"},
+        )
 
     parts = session.execute(
         select(ReadingPart)
@@ -97,7 +103,10 @@ def import_gpt(
     """Import GPT summary and questions for a reading part."""
     part = session.get(ReadingPart, part_id)
     if not part:
-        raise HTTPException(status_code=404, detail="Reading part not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Reading part not found", "code": "NOT_FOUND"},
+        )
 
     part.gpt_summary = payload.gpt_summary
     questions_by_interval = payload.gpt_questions_by_interval.root
@@ -118,12 +127,21 @@ def import_gpt(
     review_items: list[ReviewItemOut] = []
     book = session.get(Book, part.book_id)
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Book not found", "code": "NOT_FOUND"},
+        )
 
     try:
         interval_values = [int(value) for value in intervals]
     except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="Invalid intervals configuration")
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": "Invalid intervals configuration",
+                "code": "IMPORT_PAYLOAD_INVALID",
+            },
+        )
 
     for interval_value in interval_values:
         questions = questions_by_interval.get(interval_value)

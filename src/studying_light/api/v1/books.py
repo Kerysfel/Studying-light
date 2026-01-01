@@ -37,15 +37,24 @@ def update_book(
     """Update an existing book."""
     book = session.get(Book, book_id)
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Book not found", "code": "NOT_FOUND"},
+        )
 
     updates = payload.model_dump(exclude_unset=True)
     if not updates:
-        raise HTTPException(status_code=400, detail="No fields provided for update")
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "No fields provided for update", "code": "BAD_REQUEST"},
+        )
 
     status_value = updates.get("status")
     if status_value and status_value not in {"active", "archived"}:
-        raise HTTPException(status_code=422, detail="Invalid status value")
+        raise HTTPException(
+            status_code=422,
+            detail={"detail": "Invalid status value", "code": "VALIDATION_ERROR"},
+        )
 
     for key, value in updates.items():
         setattr(book, key, value)
@@ -60,7 +69,10 @@ def delete_book(book_id: int, session: Session = Depends(get_session)) -> dict[s
     """Delete a book."""
     book = session.get(Book, book_id)
     if not book:
-        raise HTTPException(status_code=404, detail="Book not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Book not found", "code": "NOT_FOUND"},
+        )
 
     session.delete(book)
     session.commit()

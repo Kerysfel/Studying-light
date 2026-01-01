@@ -67,7 +67,10 @@ def complete_review(
     """Complete a review item."""
     review_item = session.get(ReviewScheduleItem, review_id)
     if not review_item:
-        raise HTTPException(status_code=404, detail="Review item not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Review item not found", "code": "NOT_FOUND"},
+        )
 
     review_item.status = "done"
     review_item.completed_at = datetime.now(timezone.utc)
@@ -79,7 +82,10 @@ def complete_review(
     part = session.get(ReadingPart, review_item.reading_part_id)
     book = session.get(Book, part.book_id) if part else None
     if not part or not book:
-        raise HTTPException(status_code=404, detail="Related book or part not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Related book or part not found", "code": "NOT_FOUND"},
+        )
 
     return _build_review_item_out(review_item, part, book)
 
@@ -93,7 +99,10 @@ def save_gpt_feedback(
     """Save GPT feedback for a review."""
     review_item = session.get(ReviewScheduleItem, review_id)
     if not review_item:
-        raise HTTPException(status_code=404, detail="Review item not found")
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Review item not found", "code": "NOT_FOUND"},
+        )
 
     attempt = session.execute(
         select(ReviewAttempt)

@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, field_validator
 
 from studying_light.api.v1.structures import GptQuestionsByInterval, RawNotes
 
@@ -62,6 +62,25 @@ class ImportGptPayload(BaseModel):
 
     gpt_summary: str
     gpt_questions_by_interval: GptQuestionsByInterval
+
+    @field_validator("gpt_summary")
+    @classmethod
+    def validate_summary(cls, value: str) -> str:
+        """Ensure summary is not empty."""
+        if not value.strip():
+            raise ValueError("gpt_summary cannot be empty")
+        return value
+
+    @field_validator("gpt_questions_by_interval")
+    @classmethod
+    def validate_intervals(
+        cls,
+        value: GptQuestionsByInterval,
+    ) -> GptQuestionsByInterval:
+        """Ensure questions are provided for at least one interval."""
+        if not value.root:
+            raise ValueError("gpt_questions_by_interval cannot be empty")
+        return value
 
 
 class ReviewItemOut(BaseModel):
