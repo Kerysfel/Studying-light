@@ -2,6 +2,21 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 
+const formatDueDate = (value) => {
+  if (!value) {
+    return "-";
+  }
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (value === todayKey) {
+    return "Сегодня";
+  }
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+  return parsed.toLocaleDateString();
+};
+
 const Reviews = () => {
   const [items, setItems] = useState([]);
   const [selectedId, setSelectedId] = useState(null);
@@ -320,15 +335,15 @@ const Reviews = () => {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Повторения на сегодня</h2>
-            <p className="muted">Сначала закрывайте короткие интервалы.</p>
+            <h2>Ближайшие повторения</h2>
+            <p className="muted">План повторений по всем частям.</p>
           </div>
-          <span className="badge">Сегодня</span>
+          <span className="badge">План</span>
         </div>
         {error && <div className="alert error">{error}</div>}
         {loading && <p className="muted">Загрузка повторений...</p>}
         {!loading && items.length === 0 && (
-          <div className="empty-state">На сегодня повторений нет.</div>
+          <div className="empty-state">Пока нет запланированных повторений.</div>
         )}
         <div className="list">
           {items.map((item) => (
@@ -341,7 +356,8 @@ const Reviews = () => {
               <div>
                 <div className="list-title">{item.book_title}</div>
                 <div className="list-meta">
-                  Часть {item.part_index} · Интервал {item.interval_days} дней
+                  Часть {item.part_index} · Интервал {item.interval_days} дней ·{" "}
+                  Дата: {formatDueDate(item.due_date)}
                 </div>
               </div>
               <button
