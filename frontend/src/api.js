@@ -11,6 +11,7 @@ const errorMessages = {
   FORBIDDEN: "Недостаточно прав для действия.",
   INTERNAL_ERROR: "Внутренняя ошибка сервера.",
   NETWORK_ERROR: "Ошибка сети. Проверьте подключение.",
+  PAGE_END_INVALID: "Страница остановки не может быть меньше предыдущей.",
 };
 
 const parseJson = async (response) => {

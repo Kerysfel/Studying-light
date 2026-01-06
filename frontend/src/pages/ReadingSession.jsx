@@ -47,7 +47,7 @@ const ReadingSession = () => {
   const [terms, setTerms] = useState("");
   const [sentences, setSentences] = useState("");
   const [freeform, setFreeform] = useState("");
-  const [pagesRead, setPagesRead] = useState("");
+  const [pageEnd, setPageEnd] = useState("");
   const [activeTab, setActiveTab] = useState("keywords");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -291,13 +291,15 @@ const ReadingSession = () => {
       return;
     }
 
-    const pagesValue = pagesRead.trim();
-    const pagesReadValue = pagesValue ? Number(pagesValue) : null;
-    if (
-      pagesValue &&
-      (!Number.isInteger(pagesReadValue) || pagesReadValue < 0)
-    ) {
-      setError("Прочитанные страницы должны быть нулем или положительным числом.");
+    const pageValue = pageEnd.trim();
+    if (!pageValue) {
+      setError("Укажите страницу, на которой остановились.");
+      setShowSaveModal(false);
+      return;
+    }
+    const pageEndValue = Number(pageValue);
+    if (!Number.isInteger(pageEndValue) || pageEndValue <= 0) {
+      setError("Страница должна быть положительным целым числом.");
       setShowSaveModal(false);
       return;
     }
@@ -314,7 +316,7 @@ const ReadingSession = () => {
         sentences: splitLines(sentences),
         freeform: splitLines(freeform),
       },
-      pages_read: pagesReadValue,
+      page_end: pageEndValue,
       session_seconds: sessionSeconds,
     };
 
@@ -341,7 +343,7 @@ const ReadingSession = () => {
     setTerms("");
     setSentences("");
     setFreeform("");
-    setPagesRead("");
+    setPageEnd("");
     setCreatedPart(null);
     setSessionSeconds(0);
     resetPomodoro();
@@ -559,13 +561,13 @@ const ReadingSession = () => {
             </div>
             <div className="modal-body">
               <div className="form-block full">
-                <label>Прочитано страниц (необязательно)</label>
+                <label>Страница, на которой остановились</label>
                 <input
                   type="number"
-                  value={pagesRead}
-                  onChange={(event) => setPagesRead(event.target.value)}
-                  placeholder="20"
-                  min="0"
+                  value={pageEnd}
+                  onChange={(event) => setPageEnd(event.target.value)}
+                  placeholder="120"
+                  min="1"
                 />
               </div>
             </div>

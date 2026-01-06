@@ -19,6 +19,39 @@ router: APIRouter = APIRouter()
 DEFAULT_INTERVALS: list[int] = [1, 7, 16, 35, 90]
 
 
+def _compute_pages_read(
+    session: Session,
+    book_id: int,
+    part_index: int,
+    page_end: int,
+) -> int:
+    """Compute pages read based on the last saved page."""
+    last_end = session.execute(
+        select(ReadingPart.page_end)
+        .where(
+            ReadingPart.book_id == book_id,
+            ReadingPart.page_end.is_not(None),
+            ReadingPart.part_index < part_index,
+        )
+        .order_by(ReadingPart.part_index.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+
+    if last_end is None:
+        return page_end
+
+    if page_end < last_end:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": "page_end must be greater than or equal to last saved page",
+                "code": "PAGE_END_INVALID",
+            },
+        )
+
+    return page_end - last_end
+
+
 def _build_review_item_out(
     item: ReviewScheduleItem,
     part: ReadingPart,
@@ -61,14 +94,24 @@ def create_part(
         part_index = (max_index or 0) + 1
 
     raw_notes = payload.raw_notes.model_dump() if payload.raw_notes else None
+    pages_read_value = payload.pages_read
+    page_end_value = payload.page_end
+    if page_end_value is not None:
+        pages_read_value = _compute_pages_read(
+            session,
+            payload.book_id,
+            part_index,
+            page_end_value,
+        )
 
     part = ReadingPart(
         book_id=payload.book_id,
         part_index=part_index,
         label=payload.label,
         raw_notes=raw_notes,
-        pages_read=payload.pages_read,
+        pages_read=pages_read_value,
         session_seconds=payload.session_seconds,
+        page_end=page_end_value,
     )
     session.add(part)
     session.commit()

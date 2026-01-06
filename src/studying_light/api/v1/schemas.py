@@ -79,6 +79,7 @@ class ReadingPartCreate(BaseModel):
     raw_notes: RawNotes | None = None
     pages_read: int | None = None
     session_seconds: int | None = None
+    page_end: int | None = None
 
     @field_validator("pages_read")
     @classmethod
@@ -100,6 +101,16 @@ class ReadingPartCreate(BaseModel):
             raise ValueError("session_seconds must be zero or positive")
         return value
 
+    @field_validator("page_end")
+    @classmethod
+    def validate_page_end(cls, value: int | None) -> int | None:
+        """Ensure page_end is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("page_end must be positive")
+        return value
+
 
 class ReadingPartOut(BaseModel):
     """Reading part response."""
@@ -116,6 +127,7 @@ class ReadingPartOut(BaseModel):
     gpt_questions_by_interval: dict | None = None
     pages_read: int | None = None
     session_seconds: int | None = None
+    page_end: int | None = None
 
 
 class ImportGptPayload(BaseModel):
