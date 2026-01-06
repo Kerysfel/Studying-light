@@ -1,15 +1,27 @@
 """Database session management."""
 
 import os
-from pathlib import Path
-
 from collections.abc import Iterator
+from pathlib import Path
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 DATABASE_URL_ENV: str = "DATABASE_URL"
 DB_PATH_ENV: str = "DB_PATH"
+DEFAULT_DB_PATH: str = "data/app.db"
+CONTAINER_DB_PATH: str = "/data/app.db"
+DOCKER_ENV_PATH: Path = Path("/.dockerenv")
+
+
+def resolve_db_path() -> Path:
+    """Resolve database path from environment or defaults."""
+    db_path = os.getenv(DB_PATH_ENV)
+    if db_path:
+        return Path(db_path).expanduser()
+    if DOCKER_ENV_PATH.exists():
+        return Path(CONTAINER_DB_PATH)
+    return Path(DEFAULT_DB_PATH)
 
 
 def build_database_url() -> str:
@@ -18,8 +30,7 @@ def build_database_url() -> str:
     if database_url:
         return database_url
 
-    db_path = os.getenv(DB_PATH_ENV, "data/app.db")
-    path = Path(db_path).expanduser()
+    path = resolve_db_path()
     if not path.is_absolute():
         path = path.resolve()
     return f"sqlite:///{path.as_posix()}"
