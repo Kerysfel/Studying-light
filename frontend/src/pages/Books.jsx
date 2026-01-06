@@ -2,6 +2,29 @@ import { useEffect, useState } from "react";
 
 import { getErrorMessage, request } from "../api.js";
 
+const formatReadingDuration = (value) => {
+  const totalSeconds = Number(value);
+  if (!Number.isFinite(totalSeconds) || totalSeconds <= 0) {
+    return "0 мин";
+  }
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60) {
+    return `${totalMinutes} мин`;
+  }
+  const totalHours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (totalHours < 24) {
+    return minutes ? `${totalHours} ч ${minutes} мин` : `${totalHours} ч`;
+  }
+  const days = Math.floor(totalHours / 24);
+  const hours = totalHours % 24;
+  if (days < 30) {
+    return hours ? `${days} дн ${hours} ч` : `${days} дн`;
+  }
+  const months = Math.floor(days / 30);
+  return `${months} мес`;
+};
+
 const Books = () => {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
@@ -154,6 +177,18 @@ const Books = () => {
               {item.pages_total
                 ? `Страниц: ${item.pages_total}`
                 : "Страницы не указаны"}
+            </div>
+            <div className="card-detail">
+              {`Прочитано страниц: ${item.pages_read_total ?? 0}`}
+            </div>
+            <div className="card-detail">
+              {`Частей сохранено: ${item.parts_total ?? 0}`}
+            </div>
+            <div className="card-detail">
+              {`Сессий чтения: ${item.sessions_total ?? 0}`}
+            </div>
+            <div className="card-detail">
+              {`Время чтения: ${formatReadingDuration(item.reading_seconds_total)}`}
             </div>
             <div className="form-actions">
               <button

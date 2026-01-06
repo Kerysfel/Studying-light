@@ -315,6 +315,7 @@ const ReadingSession = () => {
         freeform: splitLines(freeform),
       },
       pages_read: pagesReadValue,
+      session_seconds: sessionSeconds,
     };
 
     try {

@@ -68,6 +68,7 @@ def create_part(
         label=payload.label,
         raw_notes=raw_notes,
         pages_read=payload.pages_read,
+        session_seconds=payload.session_seconds,
     )
     session.add(part)
     session.commit()

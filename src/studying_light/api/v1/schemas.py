@@ -56,6 +56,20 @@ class BookOut(BaseModel):
     pages_total: int | None = None
 
 
+class BookStatsOut(BaseModel):
+    """Book response with reading statistics."""
+
+    id: int
+    title: str
+    author: str | None = None
+    status: str
+    pages_total: int | None = None
+    pages_read_total: int
+    parts_total: int
+    sessions_total: int
+    reading_seconds_total: int
+
+
 class ReadingPartCreate(BaseModel):
     """Reading part creation payload."""
 
@@ -64,6 +78,7 @@ class ReadingPartCreate(BaseModel):
     label: str | None = None
     raw_notes: RawNotes | None = None
     pages_read: int | None = None
+    session_seconds: int | None = None
 
     @field_validator("pages_read")
     @classmethod
@@ -73,6 +88,16 @@ class ReadingPartCreate(BaseModel):
             return value
         if value < 0:
             raise ValueError("pages_read must be zero or positive")
+        return value
+
+    @field_validator("session_seconds")
+    @classmethod
+    def validate_session_seconds(cls, value: int | None) -> int | None:
+        """Ensure session seconds are not negative when provided."""
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("session_seconds must be zero or positive")
         return value
 
 
@@ -90,6 +115,7 @@ class ReadingPartOut(BaseModel):
     gpt_summary: str | None = None
     gpt_questions_by_interval: dict | None = None
     pages_read: int | None = None
+    session_seconds: int | None = None
 
 
 class ImportGptPayload(BaseModel):

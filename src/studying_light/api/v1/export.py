@@ -34,6 +34,7 @@ EXPORT_COLUMNS: list[str] = [
     "gpt_summary",
     "gpt_questions_by_interval",
     "pages_read",
+    "session_seconds",
     "interval_days",
     "due_date",
     "completed_at",
@@ -94,6 +95,7 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
                 "gpt_summary": part.gpt_summary,
                 "gpt_questions_by_interval": part.gpt_questions_by_interval,
                 "pages_read": part.pages_read,
+                "session_seconds": part.session_seconds,
             }
         )
 
@@ -178,6 +180,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
             "gpt_summary": part.gpt_summary,
             "gpt_questions_by_interval": part.gpt_questions_by_interval,
             "pages_read": part.pages_read,
+            "session_seconds": part.session_seconds,
         }
         for part in parts
     ]
@@ -209,6 +212,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
             "gpt_summary",
             "gpt_questions_by_interval",
             "pages_read",
+            "session_seconds",
         ],
     )
     review_csv = _build_table_csv(
