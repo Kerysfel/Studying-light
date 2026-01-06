@@ -1,11 +1,14 @@
 """Book endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from studying_light.api.v1.schemas import BookCreate, BookOut, BookUpdate
 from studying_light.db.models.book import Book
+from studying_light.db.models.reading_part import ReadingPart
+from studying_light.db.models.review_attempt import ReviewAttempt
+from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -21,7 +24,12 @@ def list_books(session: Session = Depends(get_session)) -> list[BookOut]:
 @router.post("/books", status_code=status.HTTP_201_CREATED)
 def create_book(payload: BookCreate, session: Session = Depends(get_session)) -> BookOut:
     """Create a new book."""
-    book = Book(title=payload.title, author=payload.author, status="active")
+    book = Book(
+        title=payload.title,
+        author=payload.author,
+        status="active",
+        pages_total=payload.pages_total,
+    )
     session.add(book)
     session.commit()
     session.refresh(book)
@@ -73,6 +81,28 @@ def delete_book(book_id: int, session: Session = Depends(get_session)) -> dict[s
             status_code=404,
             detail={"detail": "Book not found", "code": "NOT_FOUND"},
         )
+
+    part_ids = session.execute(
+        select(ReadingPart.id).where(ReadingPart.book_id == book_id)
+    ).scalars().all()
+    if part_ids:
+        review_item_ids = session.execute(
+            select(ReviewScheduleItem.id).where(
+                ReviewScheduleItem.reading_part_id.in_(part_ids)
+            )
+        ).scalars().all()
+        if review_item_ids:
+            session.execute(
+                delete(ReviewAttempt).where(
+                    ReviewAttempt.review_item_id.in_(review_item_ids)
+                )
+            )
+            session.execute(
+                delete(ReviewScheduleItem).where(
+                    ReviewScheduleItem.id.in_(review_item_ids)
+                )
+            )
+        session.execute(delete(ReadingPart).where(ReadingPart.id.in_(part_ids)))
 
     session.delete(book)
     session.commit()

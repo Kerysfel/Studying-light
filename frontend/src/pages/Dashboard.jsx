@@ -45,6 +45,10 @@ const Dashboard = () => {
 
   const activeBooks = today?.active_books || [];
   const reviewItems = today?.review_items || [];
+  const reviewProgress = today?.review_progress || { total: 0, completed: 0 };
+  const reviewPercent = reviewProgress.total
+    ? Math.min((reviewProgress.completed / reviewProgress.total) * 100, 100)
+    : 0;
 
   const dismissSummary = () => {
     setShowSummary(false);
@@ -150,6 +154,15 @@ const Dashboard = () => {
               <p className="card-detail">{item.detail}</p>
             </div>
           ))}
+          <div className="card" style={{ "--delay": `${0.05 * 3}s` }}>
+            <div className="card-title">Прогресс повторений</div>
+            <div className="card-meta">
+              {reviewProgress.completed} / {reviewProgress.total} завершено
+            </div>
+            <div className="progress-track">
+              <div className="progress-bar" style={{ width: `${reviewPercent}%` }} />
+            </div>
+          </div>
         </div>
       </section>
 
@@ -205,6 +218,24 @@ const Dashboard = () => {
               <div>
                 <div className="list-title">{item.title}</div>
                 <div className="list-meta">Готово к новой части</div>
+              <div className="list-meta">
+                {item.pages_total
+                  ? `Страниц: ${item.pages_read_total} / ${item.pages_total}`
+                  : "Страницы не указаны"}
+              </div>
+              {item.pages_total && (
+                <div className="progress-track">
+                  <div
+                    className="progress-bar"
+                    style={{
+                      width: `${Math.min(
+                        (item.pages_read_total / item.pages_total) * 100,
+                        100
+                      )}%`,
+                    }}
+                  />
+                </div>
+              )}
               </div>
               <Link className="primary-button" to="/session">
                 Начать сессию

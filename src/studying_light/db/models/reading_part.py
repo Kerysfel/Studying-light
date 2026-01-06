@@ -24,6 +24,7 @@ class ReadingPart(Base):
     raw_notes: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     gpt_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     gpt_questions_by_interval: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    pages_read: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     book: Mapped["Book"] = relationship(back_populates="reading_parts")
     review_items: Mapped[list["ReviewScheduleItem"]] = relationship(

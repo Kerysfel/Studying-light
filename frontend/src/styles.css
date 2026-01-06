@@ -777,6 +777,79 @@ select {
   color: var(--color-muted);
 }
 
+.stats-controls {
+  display: flex;
+  gap: 10px;
+}
+
+.stats-scroller {
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  scroll-snap-type: x mandatory;
+}
+
+.stats-card {
+  flex: 0 0 280px;
+  background: var(--color-surface-muted);
+  border-radius: 18px;
+  padding: 16px;
+  border: 1px solid rgba(35, 53, 68, 0.08);
+  display: grid;
+  gap: 12px;
+  scroll-snap-align: start;
+}
+
+.stats-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.stats-title {
+  font-weight: 600;
+}
+
+.stats-meta {
+  font-size: 12px;
+  color: var(--color-muted);
+}
+
+.stats-summary {
+  font-size: 13px;
+  color: var(--color-slate);
+  min-height: 42px;
+}
+
+.stats-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.schedule-list {
+  display: grid;
+  gap: 12px;
+}
+
+.schedule-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.7);
+  border: 1px solid rgba(35, 53, 68, 0.12);
+}
+
+.schedule-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .about-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));

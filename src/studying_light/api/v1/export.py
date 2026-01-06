@@ -27,11 +27,13 @@ EXPORT_COLUMNS: list[str] = [
     "title",
     "author",
     "status",
+    "pages_total",
     "label",
     "created_at",
     "raw_notes",
     "gpt_summary",
     "gpt_questions_by_interval",
+    "pages_read",
     "interval_days",
     "due_date",
     "completed_at",
@@ -70,6 +72,7 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
                 "title": book.title,
                 "author": book.author,
                 "status": book.status,
+                "pages_total": book.pages_total,
             }
         )
 
@@ -90,6 +93,7 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
                 "raw_notes": part.raw_notes,
                 "gpt_summary": part.gpt_summary,
                 "gpt_questions_by_interval": part.gpt_questions_by_interval,
+                "pages_read": part.pages_read,
             }
         )
 
@@ -159,6 +163,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
             "title": book.title,
             "author": book.author,
             "status": book.status,
+            "pages_total": book.pages_total,
         }
         for book in books
     ]
@@ -172,6 +177,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
             "raw_notes": part.raw_notes,
             "gpt_summary": part.gpt_summary,
             "gpt_questions_by_interval": part.gpt_questions_by_interval,
+            "pages_read": part.pages_read,
         }
         for part in parts
     ]
@@ -188,7 +194,9 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
         for review in reviews
     ]
 
-    book_csv = _build_table_csv(book_rows, ["id", "title", "author", "status"])
+    book_csv = _build_table_csv(
+        book_rows, ["id", "title", "author", "status", "pages_total"]
+    )
     part_csv = _build_table_csv(
         part_rows,
         [
@@ -200,6 +208,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
             "raw_notes",
             "gpt_summary",
             "gpt_questions_by_interval",
+            "pages_read",
         ],
     )
     review_csv = _build_table_csv(
