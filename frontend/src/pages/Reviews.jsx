@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 
@@ -18,6 +18,18 @@ const Reviews = () => {
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptTemplate, setPromptTemplate] = useState("");
+
+  const [stats, setStats] = useState([]);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [statsError, setStatsError] = useState("");
+  const [schedulePart, setSchedulePart] = useState(null);
+  const [scheduleItems, setScheduleItems] = useState([]);
+  const [scheduleEdits, setScheduleEdits] = useState({});
+  const [scheduleLoading, setScheduleLoading] = useState(false);
+  const [scheduleSaving, setScheduleSaving] = useState(false);
+  const [scheduleError, setScheduleError] = useState("");
+
+  const statsRef = useRef(null);
 
   useEffect(() => {
     let active = true;
@@ -47,7 +59,114 @@ const Reviews = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadStats = async () => {
+      try {
+        setStatsLoading(true);
+        const data = await request("/reviews/stats");
+        if (!active) {
+          return;
+        }
+        setStats(data);
+        setStatsError("");
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        setStatsError(getErrorMessage(err));
+      } finally {
+        if (active) {
+          setStatsLoading(false);
+        }
+      }
+    };
+    loadStats();
+    return () => {
+      active = false;
+    };
+  }, []);
+
   const questions = detail?.questions || [];
+
+  const summaryPreview = (textValue) => {
+    if (!textValue) {
+      return "Краткое содержание недоступно.";
+    }
+    const words = textValue.trim().split(/\s+/).slice(0, 10);
+    return words.join(" ") + (words.length === 10 ? "..." : "");
+  };
+
+  const openSchedule = async (part) => {
+    setSchedulePart(part);
+    setScheduleItems([]);
+    setScheduleEdits({});
+    setScheduleError("");
+    try {
+      setScheduleLoading(true);
+      const data = await request(
+        `/reviews/schedule?reading_part_id=${part.reading_part_id}`
+      );
+      setScheduleItems(data);
+      const edits = {};
+      data.forEach((item) => {
+        edits[item.id] = item.due_date;
+      });
+      setScheduleEdits(edits);
+    } catch (err) {
+      setScheduleError(getErrorMessage(err));
+    } finally {
+      setScheduleLoading(false);
+    }
+  };
+
+  const closeSchedule = () => {
+    setSchedulePart(null);
+    setScheduleItems([]);
+    setScheduleEdits({});
+    setScheduleError("");
+  };
+
+  const handleScheduleDateChange = (id, value) => {
+    setScheduleEdits((prev) => ({ ...prev, [id]: value }));
+  };
+
+  const handleScheduleSave = async (id) => {
+    const dueDate = scheduleEdits[id];
+    if (!dueDate) {
+      setScheduleError("Выберите дату повторения.");
+      return;
+    }
+    try {
+      setScheduleSaving(true);
+      await request(`/reviews/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ due_date: dueDate }),
+      });
+      setScheduleItems((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, due_date: dueDate } : item
+        )
+      );
+      setScheduleError("");
+    } catch (err) {
+      setScheduleError(getErrorMessage(err));
+    } finally {
+      setScheduleSaving(false);
+    }
+  };
+
+  const scrollStats = (direction) => {
+    const container = statsRef.current;
+    if (!container) {
+      return;
+    }
+    const offset = container.clientWidth * 0.8;
+    container.scrollBy({
+      left: direction === "next" ? offset : -offset,
+      behavior: "smooth",
+    });
+  };
 
   const handleStartReview = async (reviewId) => {
     setActionError("");
@@ -196,7 +315,8 @@ const Reviews = () => {
   };
 
   return (
-    <div className="review-layout">
+    <div className="page-grid">
+      <div className="review-layout">
       <section className="panel">
         <div className="panel-header">
           <div>
@@ -307,6 +427,77 @@ const Reviews = () => {
           </div>
         )}
       </section>
+      </div>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Статистика повторений</h2>
+            <p className="muted">
+              Прогресс по частям и ближайшие повторения.
+            </p>
+          </div>
+          <div className="stats-controls">
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => scrollStats("prev")}
+            >
+              Назад
+            </button>
+            <button
+              className="ghost-button"
+              type="button"
+              onClick={() => scrollStats("next")}
+            >
+              Вперед
+            </button>
+          </div>
+        </div>
+        {statsError && <div className="alert error">{statsError}</div>}
+        {statsLoading && <p className="muted">Загрузка статистики...</p>}
+        {!statsLoading && stats.length === 0 && (
+          <div className="empty-state">Пока нет частей.</div>
+        )}
+        <div className="stats-scroller" ref={statsRef}>
+          {stats.map((part) => {
+            const percent = part.total_reviews
+              ? Math.min((part.completed_reviews / part.total_reviews) * 100, 100)
+              : 0;
+            return (
+              <div key={part.reading_part_id} className="stats-card">
+                <div className="stats-header">
+                  <div>
+                    <div className="stats-title">{part.book_title}</div>
+                    <div className="stats-meta">Part {part.part_index}</div>
+                  </div>
+                  <span className="pill">
+                    {part.completed_reviews}/{part.total_reviews}
+                  </span>
+                </div>
+                <div className="stats-summary">
+                  {summaryPreview(part.summary)}
+                </div>
+                <div className="progress-track">
+                  <div
+                    className="progress-bar"
+                    style={{ width: `${percent}%` }}
+                  />
+                </div>
+                <div className="stats-actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => openSchedule(part)}
+                  >
+                    Изменить даты
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       {showPrompt && detail && (
         <div className="modal-backdrop">
@@ -340,6 +531,64 @@ const Reviews = () => {
                 >
                   {copied ? "Скопировано" : "Копировать"}
                 </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {schedulePart && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h2>Правка будущих повторений</h2>
+                <p className="muted">
+                  {schedulePart.book_title} - Часть {schedulePart.part_index}
+                </p>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={closeSchedule}
+              >
+                Закрыть
+              </button>
+            </div>
+            <div className="modal-body">
+              {scheduleError && <div className="alert error">{scheduleError}</div>}
+              {scheduleLoading && <p className="muted">Загрузка повторений...</p>}
+              {!scheduleLoading && scheduleItems.length === 0 && (
+                <div className="empty-state">Нет будущих повторений.</div>
+              )}
+              <div className="schedule-list">
+                {scheduleItems.map((item) => (
+                  <div key={item.id} className="schedule-row">
+                    <div>
+                      <div className="list-title">
+                        Интервал {item.interval_days} дн
+                      </div>
+                      <div className="list-meta">Текущая дата: {item.due_date}</div>
+                    </div>
+                    <div className="schedule-actions">
+                      <input
+                        type="date"
+                        value={scheduleEdits[item.id] || item.due_date}
+                        onChange={(event) =>
+                          handleScheduleDateChange(item.id, event.target.value)
+                        }
+                      />
+                      <button
+                        className="primary-button"
+                        type="button"
+                        onClick={() => handleScheduleSave(item.id)}
+                        disabled={scheduleSaving}
+                      >
+                        Сохранить
+                      </button>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           </div>

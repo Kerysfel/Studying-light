@@ -47,6 +47,7 @@ const ReadingSession = () => {
   const [terms, setTerms] = useState("");
   const [sentences, setSentences] = useState("");
   const [freeform, setFreeform] = useState("");
+  const [pagesRead, setPagesRead] = useState("");
   const [activeTab, setActiveTab] = useState("keywords");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -290,6 +291,17 @@ const ReadingSession = () => {
       return;
     }
 
+    const pagesValue = pagesRead.trim();
+    const pagesReadValue = pagesValue ? Number(pagesValue) : null;
+    if (
+      pagesValue &&
+      (!Number.isInteger(pagesReadValue) || pagesReadValue < 0)
+    ) {
+      setError("Прочитанные страницы должны быть нулем или положительным числом.");
+      setShowSaveModal(false);
+      return;
+    }
+
     const payload = {
       book_id: Number(selectedBook),
       label: label.trim() || null,
@@ -302,6 +314,7 @@ const ReadingSession = () => {
         sentences: splitLines(sentences),
         freeform: splitLines(freeform),
       },
+      pages_read: pagesReadValue,
     };
 
     try {
@@ -327,6 +340,7 @@ const ReadingSession = () => {
     setTerms("");
     setSentences("");
     setFreeform("");
+    setPagesRead("");
     setCreatedPart(null);
     setSessionSeconds(0);
     resetPomodoro();
@@ -533,6 +547,7 @@ const ReadingSession = () => {
                   Сохранить часть или удалить заметки без сохранения?
                 </p>
               </div>
+
               <button
                 className="ghost-button"
                 type="button"
@@ -540,6 +555,18 @@ const ReadingSession = () => {
               >
                 Отмена
               </button>
+            </div>
+            <div className="modal-body">
+              <div className="form-block full">
+                <label>Прочитано страниц (необязательно)</label>
+                <input
+                  type="number"
+                  value={pagesRead}
+                  onChange={(event) => setPagesRead(event.target.value)}
+                  placeholder="20"
+                  min="0"
+                />
+              </div>
             </div>
             <div className="modal-actions">
               <button

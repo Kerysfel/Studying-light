@@ -6,6 +6,7 @@ const Books = () => {
   const [items, setItems] = useState([]);
   const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("");
+  const [pagesTotal, setPagesTotal] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [formError, setFormError] = useState("");
@@ -42,19 +43,49 @@ const Books = () => {
     event.preventDefault();
     setFormError("");
     if (!title.trim()) {
-      setFormError("Введите название книги.");
+      setFormError("Укажите название книги.");
+      return;
+    }
+    const pagesValue = pagesTotal.trim();
+    const pagesTotalValue = pagesValue ? Number(pagesValue) : null;
+    if (
+      pagesValue &&
+      (!Number.isInteger(pagesTotalValue) || pagesTotalValue <= 0)
+    ) {
+      setFormError("Общее количество страниц должно быть положительным числом.");
       return;
     }
     try {
       const created = await request("/books", {
         method: "POST",
-        body: JSON.stringify({ title: title.trim(), author: author.trim() || null }),
+        body: JSON.stringify({
+          title: title.trim(),
+          author: author.trim() || null,
+          pages_total: pagesTotalValue,
+        }),
       });
       setItems((prev) => [created, ...prev]);
       setTitle("");
       setAuthor("");
+      setPagesTotal("");
     } catch (err) {
       setFormError(getErrorMessage(err));
+    }
+  };
+
+  const handleDelete = async (bookId) => {
+    setError("");
+    const confirmed = window.confirm(
+      "Удалить книгу и все связанные данные?"
+    );
+    if (!confirmed) {
+      return;
+    }
+    try {
+      await request(`/books/${bookId}`, { method: "DELETE" });
+      setItems((prev) => prev.filter((item) => item.id !== bookId));
+    } catch (err) {
+      setError(getErrorMessage(err));
     }
   };
 
@@ -83,6 +114,16 @@ const Books = () => {
             placeholder="Необязательно"
           />
         </div>
+        <div className="form-block">
+          <label>Всего страниц</label>
+          <input
+            type="number"
+            value={pagesTotal}
+            onChange={(event) => setPagesTotal(event.target.value)}
+            placeholder="300"
+            min="1"
+          />
+        </div>
         <div className="form-actions">
           <button className="primary-button" type="submit">
             Добавить книгу
@@ -108,6 +149,20 @@ const Books = () => {
             </div>
             <div className="card-detail">
               {item.author ? `Автор: ${item.author}` : "Автор не указан"}
+            </div>
+            <div className="card-detail">
+              {item.pages_total
+                ? `Страниц: ${item.pages_total}`
+                : "Страницы не указаны"}
+            </div>
+            <div className="form-actions">
+              <button
+                className="danger-button"
+                type="button"
+                onClick={() => handleDelete(item.id)}
+              >
+                Удалить
+              </button>
             </div>
           </div>
         ))}

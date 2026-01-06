@@ -3,7 +3,7 @@
 from datetime import date, datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
 from studying_light.api.v1.schemas import (
@@ -12,6 +12,9 @@ from studying_light.api.v1.schemas import (
     ReviewDetailOut,
     ReviewFeedbackPayload,
     ReviewItemOut,
+    ReviewPartStatsOut,
+    ReviewScheduleItemOut,
+    ReviewScheduleUpdatePayload,
 )
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
@@ -57,6 +60,83 @@ def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut
     ).all()
 
     return [_build_review_item_out(item, part, book) for item, part, book in rows]
+
+
+@router.get("/reviews/schedule")
+def review_schedule(
+    reading_part_id: int | None = None,
+    session: Session = Depends(get_session),
+) -> list[ReviewScheduleItemOut]:
+    """List scheduled review items for a reading part."""
+    if reading_part_id is None:
+        raise HTTPException(
+            status_code=400,
+            detail={"detail": "reading_part_id is required", "code": "BAD_REQUEST"},
+        )
+
+    today = date.today()
+    items = session.execute(
+        select(ReviewScheduleItem)
+        .where(
+            ReviewScheduleItem.reading_part_id == reading_part_id,
+            ReviewScheduleItem.status == "planned",
+            ReviewScheduleItem.due_date >= today,
+        )
+        .order_by(ReviewScheduleItem.due_date)
+    ).scalars().all()
+
+    return [
+        ReviewScheduleItemOut(
+            id=item.id,
+            reading_part_id=item.reading_part_id,
+            interval_days=item.interval_days,
+            due_date=item.due_date,
+            status=item.status,
+        )
+        for item in items
+    ]
+
+
+@router.patch("/reviews/{review_id}")
+def update_review_schedule(
+    review_id: int,
+    payload: ReviewScheduleUpdatePayload,
+    session: Session = Depends(get_session),
+) -> ReviewScheduleItemOut:
+    """Update a planned review schedule item."""
+    review_item = session.get(ReviewScheduleItem, review_id)
+    if not review_item:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Review item not found", "code": "NOT_FOUND"},
+        )
+    if review_item.status != "planned":
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "detail": "Only planned reviews can be rescheduled",
+                "code": "CONFLICT",
+            },
+        )
+    if payload.due_date < date.today():
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": "due_date must be today or later",
+                "code": "VALIDATION_ERROR",
+            },
+        )
+
+    review_item.due_date = payload.due_date
+    session.commit()
+    session.refresh(review_item)
+    return ReviewScheduleItemOut(
+        id=review_item.id,
+        reading_part_id=review_item.reading_part_id,
+        interval_days=review_item.interval_days,
+        due_date=review_item.due_date,
+        status=review_item.status,
+    )
 
 
 @router.get("/reviews/{review_id}")
@@ -174,3 +254,62 @@ def save_gpt_feedback(
         created_at=attempt.created_at,
         gpt_check_result=attempt.gpt_check_result,
     )
+
+
+@router.get("/reviews/stats")
+def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStatsOut]:
+    """Return review completion statistics per reading part."""
+    rows = session.execute(
+        select(
+            ReadingPart.id,
+            ReadingPart.part_index,
+            ReadingPart.label,
+            ReadingPart.gpt_summary,
+            Book.id,
+            Book.title,
+            func.count(ReviewScheduleItem.id),
+            func.coalesce(
+                func.sum(
+                    case((ReviewScheduleItem.status == "done", 1), else_=0)
+                ),
+                0,
+            ),
+        )
+        .join(Book, ReadingPart.book_id == Book.id)
+        .outerjoin(
+            ReviewScheduleItem,
+            ReviewScheduleItem.reading_part_id == ReadingPart.id,
+        )
+        .group_by(
+            ReadingPart.id,
+            ReadingPart.part_index,
+            ReadingPart.label,
+            ReadingPart.gpt_summary,
+            Book.id,
+            Book.title,
+        )
+        .order_by(Book.id, ReadingPart.part_index)
+    ).all()
+
+    return [
+        ReviewPartStatsOut(
+            reading_part_id=part_id,
+            book_id=book_id,
+            book_title=book_title,
+            part_index=part_index,
+            label=label,
+            summary=summary,
+            total_reviews=int(total_reviews or 0),
+            completed_reviews=int(completed_reviews or 0),
+        )
+        for (
+            part_id,
+            part_index,
+            label,
+            summary,
+            book_id,
+            book_title,
+            total_reviews,
+            completed_reviews,
+        ) in rows
+    ]

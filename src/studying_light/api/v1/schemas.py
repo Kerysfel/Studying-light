@@ -12,6 +12,17 @@ class BookCreate(BaseModel):
 
     title: str
     author: str | None = None
+    pages_total: int | None = None
+
+    @field_validator("pages_total")
+    @classmethod
+    def validate_pages_total(cls, value: int | None) -> int | None:
+        """Ensure pages_total is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("pages_total must be positive")
+        return value
 
 
 class BookUpdate(BaseModel):
@@ -20,6 +31,17 @@ class BookUpdate(BaseModel):
     title: str | None = None
     author: str | None = None
     status: str | None = None
+    pages_total: int | None = None
+
+    @field_validator("pages_total")
+    @classmethod
+    def validate_pages_total(cls, value: int | None) -> int | None:
+        """Ensure pages_total is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("pages_total must be positive")
+        return value
 
 
 class BookOut(BaseModel):
@@ -31,6 +53,7 @@ class BookOut(BaseModel):
     title: str
     author: str | None = None
     status: str
+    pages_total: int | None = None
 
 
 class ReadingPartCreate(BaseModel):
@@ -40,6 +63,17 @@ class ReadingPartCreate(BaseModel):
     part_index: int | None = None
     label: str | None = None
     raw_notes: RawNotes | None = None
+    pages_read: int | None = None
+
+    @field_validator("pages_read")
+    @classmethod
+    def validate_pages_read(cls, value: int | None) -> int | None:
+        """Ensure pages_read is not negative when provided."""
+        if value is None:
+            return value
+        if value < 0:
+            raise ValueError("pages_read must be zero or positive")
+        return value
 
 
 class ReadingPartOut(BaseModel):
@@ -55,6 +89,7 @@ class ReadingPartOut(BaseModel):
     raw_notes: dict | None = None
     gpt_summary: str | None = None
     gpt_questions_by_interval: dict | None = None
+    pages_read: int | None = None
 
 
 class ImportGptPayload(BaseModel):
@@ -113,6 +148,53 @@ class ReviewDetailOut(BaseModel):
     questions: list[str]
 
 
+class ReviewScheduleItemOut(BaseModel):
+    """Review schedule item response."""
+
+    id: int
+    reading_part_id: int
+    interval_days: int
+    due_date: date
+    status: str
+
+
+class ReviewScheduleUpdatePayload(BaseModel):
+    """Review schedule update payload."""
+
+    due_date: date
+
+
+class ReviewPartStatsOut(BaseModel):
+    """Review statistics per reading part."""
+
+    reading_part_id: int
+    book_id: int
+    book_title: str
+    part_index: int
+    label: str | None = None
+    summary: str | None = None
+    total_reviews: int
+    completed_reviews: int
+
+
+class BookProgressOut(BaseModel):
+    """Book progress for dashboard."""
+
+    id: int
+    title: str
+    author: str | None = None
+    status: str
+    pages_total: int | None = None
+    pages_read_total: int
+
+
+class ReviewProgressOut(BaseModel):
+    """Overall review progress."""
+
+    total: int
+    completed: int
+
+
 class ReviewCompletePayload(BaseModel):
     """Review completion payload."""
 
@@ -144,8 +226,9 @@ class ImportGptResponse(BaseModel):
 class TodayResponse(BaseModel):
     """Dashboard response for today."""
 
-    active_books: list[BookOut]
+    active_books: list[BookProgressOut]
     review_items: list[ReviewItemOut]
+    review_progress: ReviewProgressOut
 
 
 class SettingsOut(BaseModel):
@@ -160,3 +243,47 @@ class SettingsOut(BaseModel):
     daily_goal_weekday_min: int | None = None
     daily_goal_weekend_min: int | None = None
     intervals_days: list | None = None
+
+
+class SettingsUpdate(BaseModel):
+    """Settings update payload."""
+
+    timezone: str | None = None
+    pomodoro_work_min: int | None = None
+    pomodoro_break_min: int | None = None
+    daily_goal_weekday_min: int | None = None
+    daily_goal_weekend_min: int | None = None
+    intervals_days: list[int] | None = None
+
+    @field_validator("pomodoro_work_min", "pomodoro_break_min")
+    @classmethod
+    def validate_pomodoro(cls, value: int | None) -> int | None:
+        """Ensure pomodoro minutes are positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("pomodoro minutes must be positive")
+        return value
+
+    @field_validator("daily_goal_weekday_min", "daily_goal_weekend_min")
+    @classmethod
+    def validate_goals(cls, value: int | None) -> int | None:
+        """Ensure daily goals are positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("daily goal minutes must be positive")
+        return value
+
+    @field_validator("intervals_days")
+    @classmethod
+    def validate_intervals(cls, value: list[int] | None) -> list[int] | None:
+        """Ensure intervals are positive when provided."""
+        if value is None:
+            return value
+        if not value:
+            raise ValueError("intervals_days cannot be empty")
+        if any(interval <= 0 for interval in value):
+            raise ValueError("intervals_days must be positive")
+        return value
+
