@@ -139,6 +139,65 @@ def update_review_schedule(
     )
 
 
+@router.get("/reviews/stats")
+def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStatsOut]:
+    """Return review completion statistics per reading part."""
+    rows = session.execute(
+        select(
+            ReadingPart.id,
+            ReadingPart.part_index,
+            ReadingPart.label,
+            ReadingPart.gpt_summary,
+            Book.id,
+            Book.title,
+            func.count(ReviewScheduleItem.id),
+            func.coalesce(
+                func.sum(
+                    case((ReviewScheduleItem.status == "done", 1), else_=0)
+                ),
+                0,
+            ),
+        )
+        .join(Book, ReadingPart.book_id == Book.id)
+        .outerjoin(
+            ReviewScheduleItem,
+            ReviewScheduleItem.reading_part_id == ReadingPart.id,
+        )
+        .group_by(
+            ReadingPart.id,
+            ReadingPart.part_index,
+            ReadingPart.label,
+            ReadingPart.gpt_summary,
+            Book.id,
+            Book.title,
+        )
+        .order_by(Book.id, ReadingPart.part_index)
+    ).all()
+
+    return [
+        ReviewPartStatsOut(
+            reading_part_id=part_id,
+            book_id=book_id,
+            book_title=book_title,
+            part_index=part_index,
+            label=label,
+            summary=summary,
+            total_reviews=int(total_reviews or 0),
+            completed_reviews=int(completed_reviews or 0),
+        )
+        for (
+            part_id,
+            part_index,
+            label,
+            summary,
+            book_id,
+            book_title,
+            total_reviews,
+            completed_reviews,
+        ) in rows
+    ]
+
+
 @router.get("/reviews/{review_id}")
 def review_detail(
     review_id: int,
@@ -255,61 +314,3 @@ def save_gpt_feedback(
         gpt_check_result=attempt.gpt_check_result,
     )
 
-
-@router.get("/reviews/stats")
-def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStatsOut]:
-    """Return review completion statistics per reading part."""
-    rows = session.execute(
-        select(
-            ReadingPart.id,
-            ReadingPart.part_index,
-            ReadingPart.label,
-            ReadingPart.gpt_summary,
-            Book.id,
-            Book.title,
-            func.count(ReviewScheduleItem.id),
-            func.coalesce(
-                func.sum(
-                    case((ReviewScheduleItem.status == "done", 1), else_=0)
-                ),
-                0,
-            ),
-        )
-        .join(Book, ReadingPart.book_id == Book.id)
-        .outerjoin(
-            ReviewScheduleItem,
-            ReviewScheduleItem.reading_part_id == ReadingPart.id,
-        )
-        .group_by(
-            ReadingPart.id,
-            ReadingPart.part_index,
-            ReadingPart.label,
-            ReadingPart.gpt_summary,
-            Book.id,
-            Book.title,
-        )
-        .order_by(Book.id, ReadingPart.part_index)
-    ).all()
-
-    return [
-        ReviewPartStatsOut(
-            reading_part_id=part_id,
-            book_id=book_id,
-            book_title=book_title,
-            part_index=part_index,
-            label=label,
-            summary=summary,
-            total_reviews=int(total_reviews or 0),
-            completed_reviews=int(completed_reviews or 0),
-        )
-        for (
-            part_id,
-            part_index,
-            label,
-            summary,
-            book_id,
-            book_title,
-            total_reviews,
-            completed_reviews,
-        ) in rows
-    ]
