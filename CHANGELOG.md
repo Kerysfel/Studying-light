@@ -7,6 +7,17 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-01-06
+
+### Added
+
+- Database backups command for SQLite.
+- Book statistics for pages read and total reading time.
+- Review list now shows upcoming scheduled items.
+- Reading session now captures the last page and computes pages read.
+- "Start session" button hides on the session page.
+- Pomodoro timer shows work/rest, excludes rest from session time, and adapts cycles to the session target.
+
 ## [0.1.0] - 2026-01-01
 
 ### Added

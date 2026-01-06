@@ -12,6 +12,7 @@ const getPageTitle = (pathname) => {
 const AppLayout = () => {
   const location = useLocation();
   const pageTitle = getPageTitle(location.pathname);
+  const isSessionPage = location.pathname === "/session";
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPartId, setImportPartId] = useState("");
   const [importPayload, setImportPayload] = useState("");
@@ -119,9 +120,11 @@ const AppLayout = () => {
             <h1>{pageTitle}</h1>
           </div>
           <div className="topbar-actions">
-            <NavLink className="ghost-button" to="/session">
-              Начать сессию
-            </NavLink>
+            {!isSessionPage && (
+              <NavLink className="ghost-button" to="/session">
+                Начать сессию
+              </NavLink>
+            )}
             <button className="primary-button" type="button" onClick={openImportModal}>
               Импорт JSON
             </button>

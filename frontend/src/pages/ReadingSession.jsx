@@ -3,8 +3,6 @@ import { Link } from "react-router-dom";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 
-const TOTAL_CYCLES = 4;
-
 const splitLines = (value) =>
   value
     .split("\n")
@@ -39,6 +37,40 @@ const formatClock = (totalSeconds) => {
   return `${padded(minutes)}:${padded(seconds)}`;
 };
 
+const buildPomodoroPlan = (totalMinutes, workMinutes, breakMinutes) => {
+  const safeTotal = Math.max(totalMinutes, 0);
+  const safeWork = Math.max(workMinutes, 1);
+  const safeBreak = Math.max(breakMinutes, 0);
+  const segments = [];
+  let remaining = safeTotal;
+  let isWork = true;
+  let workTotal = 0;
+  while (remaining > 0) {
+    const segmentMinutes = isWork ? safeWork : safeBreak;
+    if (segmentMinutes <= 0) {
+      if (!isWork) {
+        isWork = true;
+        continue;
+      }
+      break;
+    }
+    const duration = Math.min(segmentMinutes, remaining);
+    if (duration <= 0) {
+      break;
+    }
+    if (isWork) {
+      workTotal += duration;
+    }
+    segments.push({
+      mode: isWork ? "work" : "break",
+      seconds: duration * 60,
+    });
+    remaining -= duration;
+    isWork = !isWork;
+  }
+  return { segments, workTotal };
+};
+
 const ReadingSession = () => {
   const [books, setBooks] = useState([]);
   const [selectedBook, setSelectedBook] = useState("");
@@ -62,7 +94,7 @@ const ReadingSession = () => {
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
   const [pomodoroMode, setPomodoroMode] = useState("work");
   const [pomodoroSeconds, setPomodoroSeconds] = useState(0);
-  const [cycle, setCycle] = useState(1);
+  const [segmentIndex, setSegmentIndex] = useState(0);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [settings, setSettings] = useState(null);
 
@@ -84,8 +116,6 @@ const ReadingSession = () => {
         }
         setBooks(booksData);
         setSettings(settingsData);
-        const workMinutes = settingsData?.pomodoro_work_min || 25;
-        setPomodoroSeconds(workMinutes * 60);
       } catch (err) {
         if (!active) {
           return;
@@ -110,34 +140,56 @@ const ReadingSession = () => {
   }, [pomodoroRunning, pomodoroSeconds]);
 
   useEffect(() => {
-    if (!pomodoroRunning) {
+    if (!pomodoroRunning || pomodoroMode !== "work") {
       return;
     }
     const timerId = setInterval(() => {
       setSessionSeconds((prev) => prev + 1);
     }, 1000);
     return () => clearInterval(timerId);
-  }, [pomodoroRunning]);
+  }, [pomodoroRunning, pomodoroMode]);
+
+  const sessionPlanMinutes = useMemo(() => {
+    const day = new Date().getDay();
+    const isWeekend = day === 0 || day === 6;
+    const weekdayGoal = settings?.daily_goal_weekday_min || 40;
+    const weekendGoal = settings?.daily_goal_weekend_min || 60;
+    return isWeekend ? weekendGoal : weekdayGoal;
+  }, [settings]);
+
+  const workMinutes = settings?.pomodoro_work_min || 25;
+  const breakMinutes = settings?.pomodoro_break_min || 5;
+
+  const pomodoroPlan = useMemo(
+    () => buildPomodoroPlan(sessionPlanMinutes, workMinutes, breakMinutes),
+    [sessionPlanMinutes, workMinutes, breakMinutes]
+  );
+  const planSegments = pomodoroPlan.segments;
+  const sessionTargetMinutes = pomodoroPlan.workTotal;
 
   useEffect(() => {
-    if (!pomodoroRunning || pomodoroSeconds > 0) {
+    if (!pomodoroRunning || pomodoroSeconds > 0 || !planSegments.length) {
       return;
     }
-    const workMinutes = settings?.pomodoro_work_min || 25;
-    const breakMinutes = settings?.pomodoro_break_min || 5;
-    if (pomodoroMode === "work") {
-      if (cycle >= TOTAL_CYCLES) {
-        setPomodoroRunning(false);
-        return;
-      }
-      setPomodoroMode("break");
-      setPomodoroSeconds(breakMinutes * 60);
+    setSegmentIndex((prev) => prev + 1);
+  }, [pomodoroRunning, pomodoroSeconds, planSegments.length]);
+
+  useEffect(() => {
+    if (!planSegments.length) {
+      setPomodoroMode("work");
+      setPomodoroSeconds(0);
+      setSegmentIndex(0);
+      setPomodoroRunning(false);
       return;
     }
-    setPomodoroMode("work");
-    setPomodoroSeconds(workMinutes * 60);
-    setCycle((prev) => Math.min(prev + 1, TOTAL_CYCLES));
-  }, [pomodoroSeconds, pomodoroRunning, pomodoroMode, cycle, settings]);
+    if (segmentIndex >= planSegments.length) {
+      setPomodoroRunning(false);
+      return;
+    }
+    const segment = planSegments[segmentIndex];
+    setPomodoroMode(segment.mode);
+    setPomodoroSeconds(segment.seconds);
+  }, [planSegments, segmentIndex]);
 
   useEffect(() => {
     const refMap = {
@@ -162,16 +214,8 @@ const ReadingSession = () => {
     return book ? book.title : "";
   }, [books, selectedBook]);
 
-  const sessionGoalMinutes = useMemo(() => {
-    const day = new Date().getDay();
-    const isWeekend = day === 0 || day === 6;
-    const weekdayGoal = settings?.daily_goal_weekday_min || 40;
-    const weekendGoal = settings?.daily_goal_weekend_min || 60;
-    return isWeekend ? weekendGoal : weekdayGoal;
-  }, [settings]);
-
-  const progressRatio = sessionGoalMinutes
-    ? sessionSeconds / (sessionGoalMinutes * 60)
+  const progressRatio = sessionTargetMinutes
+    ? sessionSeconds / (sessionTargetMinutes * 60)
     : 0;
   const progressPercent = Math.min(progressRatio * 100, 100);
   let goalClass = "goal-low";
@@ -200,22 +244,36 @@ const ReadingSession = () => {
       setPomodoroRunning(false);
       return;
     }
+    if (!planSegments.length) {
+      return;
+    }
     if (pomodoroSeconds === 0) {
-      const workMinutes = settings?.pomodoro_work_min || 25;
-      setPomodoroMode("work");
-      setPomodoroSeconds(workMinutes * 60);
-      setCycle(1);
+      setSegmentIndex(0);
     }
     setPomodoroRunning(true);
   };
 
   const resetPomodoro = () => {
-    const workMinutes = settings?.pomodoro_work_min || 25;
     setPomodoroRunning(false);
-    setPomodoroMode("work");
-    setPomodoroSeconds(workMinutes * 60);
-    setCycle(1);
+    setSegmentIndex(0);
   };
+
+  const totalCycles = useMemo(
+    () => planSegments.filter((segment) => segment.mode === "work").length,
+    [planSegments]
+  );
+  const currentCycle = useMemo(() => {
+    if (!planSegments.length) {
+      return 0;
+    }
+    let completed = 0;
+    planSegments.slice(0, segmentIndex + 1).forEach((segment) => {
+      if (segment.mode === "work") {
+        completed += 1;
+      }
+    });
+    return completed || 1;
+  }, [planSegments, segmentIndex]);
 
   const buildPrompt = () => {
     if (!promptText) {
@@ -366,7 +424,10 @@ const ReadingSession = () => {
           <div className="timer-card">
             <div className="timer-count">{formatClock(pomodoroSeconds)}</div>
             <div className="timer-meta">
-              Цикл {cycle} из {TOTAL_CYCLES}
+              {pomodoroMode === "work" ? "Работа" : "Отдых"}
+            </div>
+            <div className="timer-meta">
+              {totalCycles ? `Цикл ${currentCycle} из ${totalCycles}` : "Цикл -"}
             </div>
             <div className="timer-actions">
               <button className="primary-button" type="button" onClick={togglePomodoro}>
@@ -381,7 +442,7 @@ const ReadingSession = () => {
           <div className="session-card">
             <div className="session-title">Таймер сессии</div>
             <div className="session-time">
-              {formatClock(sessionSeconds)} / {sessionGoalMinutes} мин
+              {formatClock(sessionSeconds)} / {sessionTargetMinutes} мин
             </div>
             <div className={`goal-indicator ${goalClass}`}>
               <div className="goal-label">
