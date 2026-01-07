@@ -1,5 +1,11 @@
 # Studying Light
 
+[![CI](https://github.com/Kerysfel/Studying-light/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Kerysfel/Studying-light/actions/workflows/ci.yml)
+[![Coverage](https://codecov.io/gh/Kerysfel/Studying-light/branch/main/graph/badge.svg)](https://codecov.io/gh/Kerysfel/Studying-light)
+[![License](https://img.shields.io/github/license/Kerysfel/Studying-light)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/Kerysfel/Studying-light)](https://github.com/Kerysfel/Studying-light/releases)
+[![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2FKerysfel%2Fstudying--light-2496ed?logo=docker)](https://github.com/Kerysfel/Studying-light/pkgs/container/studying-light)
+
 Studying Light is a lightweight reading and review companion. Track books,
 split them into parts, and schedule reviews so you keep what you read.
 

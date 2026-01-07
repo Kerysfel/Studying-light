@@ -4,13 +4,13 @@ run:
 	uv run uvicorn studying_light.main:app --reload
 
 test:
-	uv run pytest
+	uv run --extra dev pytest --cov=studying_light --cov-report=term-missing
 
 lint:
-	uv run ruff check .
+	uv run --extra dev ruff check .
 
 format:
-	uv run black .
+	uv run --extra dev black .
 
 alembic:
 	uv run alembic upgrade head

@@ -3,9 +3,11 @@
 from datetime import date, datetime, timedelta
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from studying_light.db.models.reading_part import ReadingPart
+from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 
 
 def test_part_import_creates_reviews_and_today(
@@ -66,6 +68,15 @@ def test_part_import_creates_reviews_and_today(
         interval = item["interval_days"]
         due_date = date.fromisoformat(item["due_date"])
         assert due_date == expected_due[interval]
+
+    stored_items = session.execute(
+        select(ReviewScheduleItem).where(ReviewScheduleItem.reading_part_id == part_id)
+    ).scalars().all()
+    questions_by_interval = {
+        item.interval_days: item.questions for item in stored_items
+    }
+    assert questions_by_interval[1] == ["Q1"]
+    assert questions_by_interval[7] == ["Q2"]
 
     today_response = client.get("/api/v1/today")
     assert today_response.status_code == 200

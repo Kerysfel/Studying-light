@@ -156,6 +156,7 @@ const ReadingSession = () => {
     const weekendGoal = settings?.daily_goal_weekend_min || 60;
     return isWeekend ? weekendGoal : weekdayGoal;
   }, [settings]);
+  const sessionGoalMinutes = sessionPlanMinutes;
 
   const workMinutes = settings?.pomodoro_work_min || 25;
   const breakMinutes = settings?.pomodoro_break_min || 5;
