@@ -1,26 +1,73 @@
-# Contributing
+# Вклад в проект
 
-Thanks for your interest in contributing. This project follows the standard
-open-source workflow: fork, branch, change, test, and submit a PR.
+Спасибо за интерес к Studying Light. Мы используем стандартный OSS-процесс:
+форк, ветка, изменения, тесты и Pull Request.
 
-## Run
+## Требования
+
+- Python и `uv` для бэкенда.
+- Node.js и npm для фронтенда.
+
+## Локальная настройка (backend)
+
+```bash
+cp .env.example .env
+```
+
+```bash
+uv sync --extra dev
+uv run alembic upgrade head
+uv run uvicorn studying_light.main:app --reload
+```
+
+Открыть `http://localhost:8000`.
+
+## Локальная настройка (frontend)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+## Тесты, линт, формат
+
+```bash
+uv run pytest
+```
+
+```bash
+uv run ruff check .
+```
+
+```bash
+uv run black .
+```
+
+## Миграции
+
+```bash
+uv run alembic revision --autogenerate -m "describe change"
+uv run alembic upgrade head
+```
 
 ## Pull Requests
 
-- Keep changes focused and scoped to one problem.
-- Follow existing project style and conventions.
-- Add or update tests when behavior changes.
-- Update documentation when needed.
-- Avoid unrelated refactors in the same PR.
+- Держите изменения сфокусированными на одной задаче.
+- Следуйте существующим стилям и соглашениям.
+- Добавляйте или обновляйте тесты при изменении поведения.
+- Обновляйте документацию при необходимости.
+- Избегайте несвязанных рефакторингов в одном PR.
+- Запускайте Python только через `uv run` из корня репозитория.
 
-## Commit Style
+## Сообщения коммитов
 
-- Use clear, descriptive commit messages.
-- Prefer small, reviewable commits.
-- Reference issues when applicable.
+- Пишите короткие и понятные сообщения.
+- Предпочитайте небольшие, удобные для ревью коммиты.
+- Ссылайтесь на задачи или issue при необходимости.
 
 ## Code Review
 
-- Be respectful and constructive.
-- Provide context and reasoning for feedback.
-- Resolve conversations before merging.
+- Будьте уважительны и конструктивны.
+- Давайте контекст и объясняйте решения.
+- Закрывайте обсуждения перед мерджем.

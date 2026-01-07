@@ -149,7 +149,6 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 
-specs/
 AGENTS.md
 
 *.db 
