@@ -34,6 +34,7 @@ const Reviews = () => {
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptTemplate, setPromptTemplate] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [focusMode, setFocusMode] = useState(false);
 
   const [stats, setStats] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -201,8 +202,12 @@ const Reviews = () => {
     setCopied(false);
     setShowNotes(false);
     if (reviewId === selectedId) {
+      if (!focusMode) {
+        setFocusMode(true);
+      }
       return;
     }
+    setFocusMode(true);
     try {
       setDetailLoading(true);
       const data = await request(`/reviews/${reviewId}`);
@@ -313,6 +318,7 @@ const Reviews = () => {
       setItems((prev) => prev.filter((item) => item.id !== detail.id));
       setDetail(null);
       setSelectedId(null);
+      setFocusMode(false);
       setSuccessMessage("Повторение завершено.");
     } catch (err) {
       setActionError(getErrorMessage(err));
@@ -343,8 +349,9 @@ const Reviews = () => {
 
   return (
     <div className="page-grid">
-      <div className="review-layout">
-      <section className="panel">
+      <div className={`review-layout${focusMode ? " focus" : " compact"}`}>
+        {!focusMode && (
+          <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Ближайшие повторения</h2>
@@ -358,7 +365,9 @@ const Reviews = () => {
           <div className="empty-state">Пока нет запланированных повторений.</div>
         )}
         <div className="list">
-          {items.map((item) => (
+          {items.map((item) => {
+            const isActive = selectedId === item.id && detail;
+            return (
             <div
               key={item.id}
               className={`list-row review-list-item${
@@ -377,19 +386,29 @@ const Reviews = () => {
                 type="button"
                 onClick={() => handleStartReview(item.id)}
               >
-                Начать повторение
+                {isActive ? "Продолжить" : "Начать повторение"}
               </button>
             </div>
-          ))}
+          );
+        })}
         </div>
-      </section>
+          </section>
+        )}
 
-      <section className="panel">
+        {focusMode && (
+          <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Сессия повторения</h2>
             <p className="muted">Сводка и ответы на вопросы.</p>
           </div>
+          <button
+            className="ghost-button"
+            type="button"
+            onClick={() => setFocusMode(false)}
+          >
+            К списку
+          </button>
         </div>
         {detailLoading && <p className="muted">Загрузка повторения...</p>}
         {actionError && <div className="alert error">{actionError}</div>}
@@ -531,10 +550,12 @@ const Reviews = () => {
             </div>
           </div>
         )}
-      </section>
+          </section>
+        )}
       </div>
 
-      <section className="panel">
+      {!focusMode && (
+        <section className="panel">
         <div className="panel-header">
           <div>
             <h2>Статистика повторений</h2>
@@ -602,7 +623,8 @@ const Reviews = () => {
             );
           })}
         </div>
-      </section>
+        </section>
+      )}
 
       {showPrompt && detail && (
         <div className="modal-backdrop">

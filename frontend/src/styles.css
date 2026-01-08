@@ -677,6 +677,11 @@ select {
   gap: 24px;
 }
 
+.review-layout.compact,
+.review-layout.focus {
+  grid-template-columns: 1fr;
+}
+
 .review-list-item.active {
   border-color: rgba(216, 120, 58, 0.35);
   box-shadow: 0 12px 22px rgba(216, 120, 58, 0.12);
