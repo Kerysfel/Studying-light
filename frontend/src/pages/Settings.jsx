@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { getErrorMessage, request } from "../api.js";
+import { getThemePreference, setThemePreference } from "../theme.js";
 
 const Settings = () => {
   const [form, setForm] = useState({
@@ -14,6 +15,9 @@ const Settings = () => {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [themePreference, setThemePreferenceState] = useState(() =>
+    getThemePreference()
+  );
 
   useEffect(() => {
     let active = true;
@@ -93,8 +97,34 @@ const Settings = () => {
     }
   };
 
+  const handleThemeChange = (event) => {
+    const nextPreference = setThemePreference(event.target.value);
+    setThemePreferenceState(nextPreference);
+  };
+
   return (
     <div className="page-grid">
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Тема интерфейса</h2>
+            <p className="muted">
+              Выберите светлую, тёмную или системную тему оформления.
+            </p>
+          </div>
+        </div>
+        <div className="form-grid">
+          <div className="form-block">
+            <label>Режим</label>
+            <select value={themePreference} onChange={handleThemeChange}>
+              <option value="system">Как в системе</option>
+              <option value="light">Светлая</option>
+              <option value="dark">Тёмная</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
       <section className="panel">
         <div className="panel-header">
           <div>

@@ -97,11 +97,17 @@ const ReadingSession = () => {
   const [segmentIndex, setSegmentIndex] = useState(0);
   const [sessionSeconds, setSessionSeconds] = useState(0);
   const [settings, setSettings] = useState(null);
+  const [lastPageEnd, setLastPageEnd] = useState(null);
+  const [showLastPageNotice, setShowLastPageNotice] = useState(false);
 
   const keywordRef = useRef(null);
   const termsRef = useRef(null);
   const sentencesRef = useRef(null);
   const freeformRef = useRef(null);
+  const pomodoroMsRef = useRef(0);
+  const sessionMsRef = useRef(0);
+  const lastTickRef = useRef(null);
+  const sessionStartedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -130,22 +136,77 @@ const ReadingSession = () => {
   }, []);
 
   useEffect(() => {
-    if (!pomodoroRunning || pomodoroSeconds <= 0) {
-      return undefined;
-    }
-    const timerId = setInterval(() => {
-      setPomodoroSeconds((prev) => prev - 1);
-    }, 1000);
-    return () => clearInterval(timerId);
-  }, [pomodoroRunning, pomodoroSeconds]);
-
-  useEffect(() => {
-    if (!pomodoroRunning || pomodoroMode !== "work") {
+    sessionStartedRef.current = false;
+    setShowLastPageNotice(false);
+    if (!selectedBook) {
+      setLastPageEnd(null);
       return;
     }
+    let active = true;
+    const loadLastPage = async () => {
+      try {
+        const parts = await request(`/parts?book_id=${selectedBook}`);
+        if (!active) {
+          return;
+        }
+        let lastPage = null;
+        parts.forEach((part) => {
+          const value = part.page_end;
+          if (typeof value !== "number" || !Number.isFinite(value)) {
+            return;
+          }
+          if (lastPage === null || value > lastPage) {
+            lastPage = value;
+          }
+        });
+        setLastPageEnd(lastPage);
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        setError(getErrorMessage(err));
+      }
+    };
+    loadLastPage();
+    return () => {
+      active = false;
+    };
+  }, [selectedBook]);
+
+  useEffect(() => {
+    if (!showLastPageNotice) {
+      return;
+    }
+    const timerId = setTimeout(() => {
+      setShowLastPageNotice(false);
+    }, 6000);
+    return () => clearTimeout(timerId);
+  }, [showLastPageNotice]);
+
+  useEffect(() => {
+    if (!pomodoroRunning) {
+      lastTickRef.current = null;
+      return undefined;
+    }
+    lastTickRef.current = performance.now();
     const timerId = setInterval(() => {
-      setSessionSeconds((prev) => prev + 1);
-    }, 1000);
+      const now = performance.now();
+      const lastTick = lastTickRef.current ?? now;
+      const deltaMs = now - lastTick;
+      lastTickRef.current = now;
+      if (deltaMs <= 0) {
+        return;
+      }
+      const currentRemainingMs = pomodoroMsRef.current;
+      const nextRemainingMs = Math.max(0, currentRemainingMs - deltaMs);
+      if (pomodoroMode === "work") {
+        const workDelta = Math.min(deltaMs, currentRemainingMs);
+        sessionMsRef.current += workDelta;
+        setSessionSeconds(Math.floor(sessionMsRef.current / 1000));
+      }
+      pomodoroMsRef.current = nextRemainingMs;
+      setPomodoroSeconds(Math.ceil(nextRemainingMs / 1000));
+    }, 250);
     return () => clearInterval(timerId);
   }, [pomodoroRunning, pomodoroMode]);
 
@@ -181,15 +242,21 @@ const ReadingSession = () => {
       setPomodoroSeconds(0);
       setSegmentIndex(0);
       setPomodoroRunning(false);
+      pomodoroMsRef.current = 0;
+      sessionStartedRef.current = false;
       return;
     }
     if (segmentIndex >= planSegments.length) {
       setPomodoroRunning(false);
+      setPomodoroSeconds(0);
+      pomodoroMsRef.current = 0;
+      sessionStartedRef.current = false;
       return;
     }
     const segment = planSegments[segmentIndex];
     setPomodoroMode(segment.mode);
     setPomodoroSeconds(segment.seconds);
+    pomodoroMsRef.current = segment.seconds * 1000;
   }, [planSegments, segmentIndex]);
 
   useEffect(() => {
@@ -251,12 +318,20 @@ const ReadingSession = () => {
     if (pomodoroSeconds === 0) {
       setSegmentIndex(0);
     }
+    if (!sessionStartedRef.current) {
+      if (lastPageEnd !== null) {
+        setShowLastPageNotice(true);
+      }
+      sessionStartedRef.current = true;
+    }
     setPomodoroRunning(true);
   };
 
   const resetPomodoro = () => {
     setPomodoroRunning(false);
     setSegmentIndex(0);
+    sessionStartedRef.current = false;
+    setShowLastPageNotice(false);
   };
 
   const totalCycles = useMemo(
@@ -386,6 +461,9 @@ const ReadingSession = () => {
         body: JSON.stringify(payload),
       });
       setCreatedPart(part);
+      if (typeof part.page_end === "number" && Number.isFinite(part.page_end)) {
+        setLastPageEnd(part.page_end);
+      }
       localStorage.setItem("lastPartId", String(part.id));
       setShowSaveModal(false);
     } catch (err) {
@@ -405,6 +483,9 @@ const ReadingSession = () => {
     setPageEnd("");
     setCreatedPart(null);
     setSessionSeconds(0);
+    sessionMsRef.current = 0;
+    sessionStartedRef.current = false;
+    setShowLastPageNotice(false);
     resetPomodoro();
     setShowSaveModal(false);
   };
@@ -463,6 +544,11 @@ const ReadingSession = () => {
             </div>
           </div>
         </div>
+        {showLastPageNotice && lastPageEnd !== null && (
+          <div className="alert info">
+            Вы остановились на странице №{lastPageEnd}.
+          </div>
+        )}
       </section>
 
       <section className="panel">
