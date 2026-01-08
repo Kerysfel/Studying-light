@@ -619,6 +619,12 @@ select {
   border: 1px solid rgba(46, 125, 84, 0.2);
 }
 
+.alert.info {
+  background: rgba(216, 120, 58, 0.12);
+  color: var(--color-slate);
+  border: 1px solid rgba(216, 120, 58, 0.2);
+}
+
 .empty-state {
   padding: 16px;
   border-radius: 16px;
