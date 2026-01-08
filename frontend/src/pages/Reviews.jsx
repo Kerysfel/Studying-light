@@ -33,6 +33,7 @@ const Reviews = () => {
   const [feedbackSaving, setFeedbackSaving] = useState(false);
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptTemplate, setPromptTemplate] = useState("");
+  const [showNotes, setShowNotes] = useState(false);
 
   const [stats, setStats] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -103,6 +104,16 @@ const Reviews = () => {
   }, []);
 
   const questions = detail?.questions || [];
+  const rawNotes = detail?.raw_notes || {};
+  const noteKeywords = rawNotes.keywords || [];
+  const noteTerms = rawNotes.terms || [];
+  const noteSentences = rawNotes.sentences || [];
+  const noteFreeform = rawNotes.freeform || [];
+  const hasNotes =
+    noteKeywords.length > 0 ||
+    noteTerms.length > 0 ||
+    noteSentences.length > 0 ||
+    noteFreeform.length > 0;
 
   const summaryPreview = (textValue) => {
     if (!textValue) {
@@ -188,6 +199,7 @@ const Reviews = () => {
     setSuccessMessage("");
     setShowPrompt(false);
     setCopied(false);
+    setShowNotes(false);
     if (reviewId === selectedId) {
       return;
     }
@@ -392,6 +404,83 @@ const Reviews = () => {
               <div className="summary-text">
                 {detail.summary || "Сводка не найдена."}
               </div>
+            </div>
+
+            <div className="summary-card">
+              <div className="panel-header">
+                <div>
+                  <div className="summary-title">Заметки</div>
+                  <p className="muted">
+                    Ключевые слова, термины, тезисы и заметки из чтения.
+                  </p>
+                </div>
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={() => setShowNotes((prev) => !prev)}
+                  aria-expanded={showNotes}
+                >
+                  {showNotes ? "Скрыть" : "Показать"}
+                </button>
+              </div>
+              {!showNotes && (
+                <div className="summary-text">
+                  Нажмите "Показать", чтобы открыть заметки.
+                </div>
+              )}
+              {showNotes && (
+                <div className="notes-grid">
+                  {!hasNotes && (
+                    <div className="empty-state">Заметок нет.</div>
+                  )}
+                  {noteKeywords.length > 0 && (
+                    <div>
+                      <div className="summary-title">Ключевые слова</div>
+                      <div className="pill-row">
+                        {noteKeywords.map((item, index) => (
+                          <span key={`${item}-${index}`} className="pill">
+                            {item}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {noteTerms.length > 0 && (
+                    <div>
+                      <div className="summary-title">Термины</div>
+                      <ul className="summary-list">
+                        {noteTerms.map((item, index) => {
+                          const definition = item.definition?.trim();
+                          const label = definition
+                            ? `${item.term} - ${definition}`
+                            : item.term;
+                          return <li key={`${item.term}-${index}`}>{label}</li>;
+                        })}
+                      </ul>
+                    </div>
+                  )}
+                  {noteSentences.length > 0 && (
+                    <div>
+                      <div className="summary-title">Тезисы</div>
+                      <ul className="summary-list">
+                        {noteSentences.map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {noteFreeform.length > 0 && (
+                    <div>
+                      <div className="summary-title">Свободные заметки</div>
+                      <ul className="summary-list">
+                        {noteFreeform.map((item, index) => (
+                          <li key={`${item}-${index}`}>{item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="questions-block">

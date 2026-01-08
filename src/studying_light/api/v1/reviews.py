@@ -203,7 +203,7 @@ def review_detail(
     review_id: int,
     session: Session = Depends(get_session),
 ) -> ReviewDetailOut:
-    """Return review details with summary and questions."""
+    """Return review details with summary, notes, and questions."""
     review_item = session.get(ReviewScheduleItem, review_id)
     if not review_item:
         raise HTTPException(
@@ -242,6 +242,7 @@ def review_detail(
         part_index=part.part_index,
         label=part.label,
         summary=part.gpt_summary,
+        raw_notes=part.raw_notes,
         questions=questions,
     )
 
@@ -313,4 +314,3 @@ def save_gpt_feedback(
         created_at=attempt.created_at,
         gpt_check_result=attempt.gpt_check_result,
     )
-

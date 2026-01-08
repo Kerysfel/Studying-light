@@ -701,6 +701,11 @@ select {
   line-height: var(--line-normal);
 }
 
+.notes-grid {
+  display: grid;
+  gap: 12px;
+}
+
 .questions-block {
   display: grid;
   gap: 12px;

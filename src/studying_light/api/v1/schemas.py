@@ -183,6 +183,7 @@ class ReviewDetailOut(BaseModel):
     part_index: int
     label: str | None = None
     summary: str | None = None
+    raw_notes: RawNotes | None = None
     questions: list[str]
 
 
