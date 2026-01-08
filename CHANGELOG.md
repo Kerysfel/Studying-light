@@ -7,6 +7,18 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-01-08
+
+### Added
+
+- Theme toggle with light, dark, and system options.
+- Review detail now shows reading notes (keywords, terms, sentences, freeform).
+- Session start notice displays the last page read.
+
+### Changed
+
+- Review screen layout now supports focus mode to reduce distractions.
+
 ## [0.2.0] - 2026-01-06
 
 ### Added
