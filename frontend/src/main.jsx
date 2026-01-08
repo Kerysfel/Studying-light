@@ -4,8 +4,11 @@ import { RouterProvider } from "react-router-dom";
 
 import router from "./router.jsx";
 import "./styles.css";
+import { applyThemePreference, getThemePreference } from "./theme.js";
 
 const root = document.getElementById("root");
+
+applyThemePreference(getThemePreference());
 
 createRoot(root).render(
   <StrictMode>
