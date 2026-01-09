@@ -4,7 +4,11 @@ from datetime import date, datetime
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from studying_light.api.v1.structures import GptQuestionsByInterval, RawNotes
+from studying_light.api.v1.structures import (
+    GptQuestionsByInterval,
+    GptReviewResult,
+    RawNotes,
+)
 
 
 class BookCreate(BaseModel):
@@ -185,6 +189,7 @@ class ReviewDetailOut(BaseModel):
     summary: str | None = None
     raw_notes: RawNotes | None = None
     questions: list[str]
+    gpt_feedback: GptReviewResult | None = None
 
 
 class ReviewScheduleItemOut(BaseModel):
@@ -214,6 +219,8 @@ class ReviewPartStatsOut(BaseModel):
     summary: str | None = None
     total_reviews: int
     completed_reviews: int
+    gpt_attempts_total: int
+    gpt_average_rating: float | None = None
 
 
 class BookProgressOut(BaseModel):
@@ -243,7 +250,7 @@ class ReviewCompletePayload(BaseModel):
 class ReviewFeedbackPayload(BaseModel):
     """Review feedback payload."""
 
-    gpt_check_result: str
+    gpt_check_result: GptReviewResult
 
 
 class ReviewAttemptOut(BaseModel):
@@ -253,6 +260,10 @@ class ReviewAttemptOut(BaseModel):
     review_item_id: int
     created_at: datetime
     gpt_check_result: str | None = None
+    gpt_check_payload: GptReviewResult | None = None
+    gpt_rating_1_to_5: int | None = None
+    gpt_score_0_to_100: int | None = None
+    gpt_verdict: str | None = None
 
 
 class ImportGptResponse(BaseModel):

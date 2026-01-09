@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, JSON, Text, func
+from sqlalchemy import DateTime, ForeignKey, JSON, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studying_light.db.base import Base
@@ -24,5 +24,9 @@ class ReviewAttempt(Base):
         server_default=func.now(),
     )
     gpt_check_result: Mapped[str | None] = mapped_column(Text, nullable=True)
+    gpt_check_payload: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    gpt_rating_1_to_5: Mapped[int | None] = mapped_column(nullable=True)
+    gpt_score_0_to_100: Mapped[int | None] = mapped_column(nullable=True)
+    gpt_verdict: Mapped[str | None] = mapped_column(String(16), nullable=True)
 
     review_item: Mapped["ReviewScheduleItem"] = relationship(back_populates="attempts")
