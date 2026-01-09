@@ -46,15 +46,22 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         select(Book).where(Book.status == "active").order_by(Book.id)
     ).scalars().all()
 
-    pages_rows = session.execute(
-        select(
-            ReadingPart.book_id,
-            func.coalesce(func.sum(ReadingPart.pages_read), 0),
-        )
-        .where(ReadingPart.pages_read.is_not(None))
-        .group_by(ReadingPart.book_id)
-    ).all()
-    pages_by_book = {book_id: total for book_id, total in pages_rows}
+    book_ids = [book.id for book in active_books]
+    pages_by_book: dict[int, int] = {}
+    if book_ids:
+        pages_rows = session.execute(
+            select(
+                ReadingPart.book_id,
+                func.coalesce(
+                    func.max(ReadingPart.page_end),
+                    func.sum(ReadingPart.pages_read),
+                    0,
+                ),
+            )
+            .where(ReadingPart.book_id.in_(book_ids))
+            .group_by(ReadingPart.book_id)
+        ).all()
+        pages_by_book = {book_id: int(total or 0) for book_id, total in pages_rows}
 
     review_rows = session.execute(
         select(ReviewScheduleItem, ReadingPart, Book)
