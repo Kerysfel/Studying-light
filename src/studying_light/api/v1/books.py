@@ -25,12 +25,13 @@ def _collect_book_stats(
     pages_rows = session.execute(
         select(
             ReadingPart.book_id,
-            func.coalesce(func.sum(ReadingPart.pages_read), 0),
+            func.coalesce(
+                func.max(ReadingPart.page_end),
+                func.sum(ReadingPart.pages_read),
+                0,
+            ),
         )
-        .where(
-            ReadingPart.book_id.in_(book_ids),
-            ReadingPart.pages_read.is_not(None),
-        )
+        .where(ReadingPart.book_id.in_(book_ids))
         .group_by(ReadingPart.book_id)
     ).all()
     pages_by_book = {book_id: int(total or 0) for book_id, total in pages_rows}

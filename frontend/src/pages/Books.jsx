@@ -113,96 +113,131 @@ const Books = () => {
   };
 
   return (
-    <section className="panel">
-      <div className="panel-header">
-        <div>
-          <h2>Книги</h2>
-          <p className="muted">Управляйте активными и архивными книгами.</p>
-        </div>
-      </div>
-      <form className="form-inline" onSubmit={handleSubmit}>
-        <div className="form-block">
-          <label>Название</label>
-          <input
-            value={title}
-            onChange={(event) => setTitle(event.target.value)}
-            placeholder="Например, Clean Architecture"
-          />
-        </div>
-        <div className="form-block">
-          <label>Автор</label>
-          <input
-            value={author}
-            onChange={(event) => setAuthor(event.target.value)}
-            placeholder="Необязательно"
-          />
-        </div>
-        <div className="form-block">
-          <label>Всего страниц</label>
-          <input
-            type="number"
-            value={pagesTotal}
-            onChange={(event) => setPagesTotal(event.target.value)}
-            placeholder="300"
-            min="1"
-          />
-        </div>
-        <div className="form-actions">
-          <button className="primary-button" type="submit">
-            Добавить книгу
-          </button>
-        </div>
-      </form>
-      {formError && <div className="alert error">{formError}</div>}
-      {error && <div className="alert error">{error}</div>}
-      {loading && <p className="muted">Загрузка списка...</p>}
-      {!loading && items.length === 0 && (
-        <div className="empty-state">Пока нет добавленных книг.</div>
-      )}
-      <div className="card-grid">
-        {items.map((item, index) => (
-          <div
-            key={item.id}
-            className="card"
-            style={{ "--delay": `${0.06 * index}s` }}
-          >
-            <div className="card-title">{item.title}</div>
-            <div className="card-meta">
-              {item.status === "archived" ? "Архив" : "Активна"}
-            </div>
-            <div className="card-detail">
-              {item.author ? `Автор: ${item.author}` : "Автор не указан"}
-            </div>
-            <div className="card-detail">
-              {item.pages_total
-                ? `Страниц: ${item.pages_total}`
-                : "Страницы не указаны"}
-            </div>
-            <div className="card-detail">
-              {`Прочитано страниц: ${item.pages_read_total ?? 0}`}
-            </div>
-            <div className="card-detail">
-              {`Частей сохранено: ${item.parts_total ?? 0}`}
-            </div>
-            <div className="card-detail">
-              {`Сессий чтения: ${item.sessions_total ?? 0}`}
-            </div>
-            <div className="card-detail">
-              {`Время чтения: ${formatReadingDuration(item.reading_seconds_total)}`}
-            </div>
-            <div className="form-actions">
-              <button
-                className="danger-button"
-                type="button"
-                onClick={() => handleDelete(item.id)}
-              >
-                Удалить
-              </button>
-            </div>
+    <div className="page-grid">
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Книги</h2>
+            <p className="muted">Активные и архивные книги с прогрессом.</p>
           </div>
-        ))}
-      </div>
-    </section>
+          <span className="badge">
+            {loading ? "..." : `${items.length} книг`}
+          </span>
+        </div>
+        {error && <div className="alert error">{error}</div>}
+        {loading && <p className="muted">Загрузка списка...</p>}
+        {!loading && items.length === 0 && (
+          <div className="empty-state">Пока нет добавленных книг.</div>
+        )}
+        <div className="card-grid">
+          {items.map((item, index) => (
+            <div
+              key={item.id}
+              className="card book-card"
+              style={{ "--delay": `${0.06 * index}s` }}
+            >
+              <div className="book-card-header">
+                <div>
+                  <div className="card-title">{item.title}</div>
+                  <div className="card-meta">
+                    {item.author ? item.author : "Автор не указан"}
+                  </div>
+                </div>
+                <span
+                  className={`pill status-pill ${
+                    item.status === "archived"
+                      ? "status-archived"
+                      : "status-active"
+                  }`}
+                >
+                  {item.status === "archived" ? "Архив" : "Активна"}
+                </span>
+              </div>
+              <div className="book-stats">
+                <div className="book-stat">
+                  <div className="book-stat-label">Страницы</div>
+                  <div className="book-stat-value">
+                    {item.pages_total ?? "-"}
+                  </div>
+                </div>
+                <div className="book-stat">
+                  <div className="book-stat-label">Прочитано</div>
+                  <div className="book-stat-value">
+                    {item.pages_read_total ?? 0}
+                  </div>
+                </div>
+                <div className="book-stat">
+                  <div className="book-stat-label">Частей</div>
+                  <div className="book-stat-value">{item.parts_total ?? 0}</div>
+                </div>
+                <div className="book-stat">
+                  <div className="book-stat-label">Сессий</div>
+                  <div className="book-stat-value">{item.sessions_total ?? 0}</div>
+                </div>
+                <div className="book-stat book-stat-wide">
+                  <div className="book-stat-label">Время чтения</div>
+                  <div className="book-stat-value">
+                    {formatReadingDuration(item.reading_seconds_total)}
+                  </div>
+                </div>
+              </div>
+              <div className="form-actions">
+                <button
+                  className="danger-button"
+                  type="button"
+                  onClick={() => handleDelete(item.id)}
+                >
+                  Удалить
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="panel">
+        <div className="panel-header">
+          <div>
+            <h2>Добавить книгу</h2>
+            <p className="muted">Новая книга появится в списке слева.</p>
+          </div>
+        </div>
+        <form className="form-inline" onSubmit={handleSubmit}>
+          <div className="form-block">
+            <label>Название</label>
+            <input
+              value={title}
+              onChange={(event) => setTitle(event.target.value)}
+              placeholder="Например, Clean Architecture"
+            />
+          </div>
+          <div className="form-block">
+            <label>Автор</label>
+            <input
+              value={author}
+              onChange={(event) => setAuthor(event.target.value)}
+              placeholder="Необязательно"
+            />
+          </div>
+          <div className="form-block">
+            <label>Всего страниц</label>
+            <input
+              type="number"
+              value={pagesTotal}
+              onChange={(event) => setPagesTotal(event.target.value)}
+              placeholder="300"
+              min="1"
+            />
+          </div>
+          <div className="form-actions">
+            <button className="primary-button" type="submit">
+              Добавить книгу
+            </button>
+          </div>
+        </form>
+        {formError && <div className="alert error">{formError}</div>}
+      </section>
+    </div>
   );
 };
 

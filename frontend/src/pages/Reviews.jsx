@@ -34,6 +34,7 @@ const Reviews = () => {
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptTemplate, setPromptTemplate] = useState("");
   const [showNotes, setShowNotes] = useState(false);
+  const [showGptFeedback, setShowGptFeedback] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
 
   const [stats, setStats] = useState([]);
@@ -115,6 +116,9 @@ const Reviews = () => {
     noteTerms.length > 0 ||
     noteSentences.length > 0 ||
     noteFreeform.length > 0;
+  const gptFeedback = detail?.gpt_feedback || null;
+  const gptOverall = gptFeedback?.overall || null;
+  const gptItems = gptFeedback?.items || [];
 
   const summaryPreview = (textValue) => {
     if (!textValue) {
@@ -201,6 +205,7 @@ const Reviews = () => {
     setShowPrompt(false);
     setCopied(false);
     setShowNotes(false);
+    setShowGptFeedback(false);
     if (reviewId === selectedId) {
       if (!focusMode) {
         setFocusMode(true);
@@ -255,11 +260,17 @@ const Reviews = () => {
         return `Вопрос: ${question}\nОтвет: ${answer}`;
       })
       .join("\n\n");
+    const reviewDate = new Date().toISOString().slice(0, 10);
     const replacements = {
       book_title: detail.book_title || "-",
       part_index: String(detail.part_index || "-"),
-      label: detail.label || "-",
-      summary: detail.summary || "-",
+      part_label: detail.label || "-",
+      interval_days:
+        typeof detail.interval_days === "number"
+          ? String(detail.interval_days)
+          : "-",
+      review_date: reviewDate,
+      gpt_summary: detail.summary || "-",
       qa_block: qaBlock || "-",
     };
     let rendered = promptTemplate;
@@ -333,12 +344,26 @@ const Reviews = () => {
       setActionError("Вставьте фидбек перед сохранением.");
       return;
     }
+    let parsedFeedback = null;
+    try {
+      parsedFeedback = JSON.parse(feedback);
+    } catch (err) {
+      setActionError("Некорректный JSON. Проверьте формат ответа.");
+      return;
+    }
+    if (!parsedFeedback || typeof parsedFeedback !== "object") {
+      setActionError("JSON должен быть объектом.");
+      return;
+    }
     try {
       setFeedbackSaving(true);
       await request(`/reviews/${detail.id}/save_gpt_feedback`, {
         method: "POST",
-        body: JSON.stringify({ gpt_check_result: feedback }),
+        body: JSON.stringify({ gpt_check_result: parsedFeedback }),
       });
+      setDetail((prev) =>
+        prev ? { ...prev, gpt_feedback: parsedFeedback } : prev
+      );
       setSuccessMessage("Фидбек сохранен.");
     } catch (err) {
       setActionError(getErrorMessage(err));
@@ -529,13 +554,105 @@ const Reviews = () => {
               </button>
             </div>
 
+            {gptFeedback && gptOverall && (
+              <div className="summary-card">
+                <div className="panel-header">
+                  <div>
+                    <div className="summary-title">Оценка GPT</div>
+                    <p className="muted">
+                      Итоговая оценка и ключевые замечания по ответам.
+                    </p>
+                  </div>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => setShowGptFeedback((prev) => !prev)}
+                  >
+                    {showGptFeedback ? "Скрыть" : "Показать"}
+                  </button>
+                </div>
+                <div className="summary-text">
+                  Оценка: {gptOverall.rating_1_to_5}/5 ·{" "}
+                  {gptOverall.score_0_to_100} · {gptOverall.verdict}
+                </div>
+                {showGptFeedback && (
+                  <>
+                    <div className="notes-grid">
+                      <div>
+                        <div className="summary-title">Ключевые пробелы</div>
+                        {gptOverall.key_gaps.length > 0 ? (
+                          <ul className="summary-list">
+                            {gptOverall.key_gaps.map((item, index) => (
+                              <li key={`${item}-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="summary-text">Нет.</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="summary-title">Следующие шаги</div>
+                        {gptOverall.next_steps.length > 0 ? (
+                          <ul className="summary-list">
+                            {gptOverall.next_steps.map((item, index) => (
+                              <li key={`${item}-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="summary-text">Нет.</div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="summary-title">Ограничения</div>
+                        {gptOverall.limitations.length > 0 ? (
+                          <ul className="summary-list">
+                            {gptOverall.limitations.map((item, index) => (
+                              <li key={`${item}-${index}`}>{item}</li>
+                            ))}
+                          </ul>
+                        ) : (
+                          <div className="summary-text">Нет.</div>
+                        )}
+                      </div>
+                    </div>
+                    {gptItems.length > 0 && (
+                      <div className="questions-block">
+                        <div className="questions-title">Оценка по вопросам</div>
+                        {gptItems.map((item, index) => (
+                          <div
+                            key={`${item.question}-${index}`}
+                            className="question-card"
+                          >
+                            <div className="question-text">{item.question}</div>
+                            <div className="summary-text">
+                              Оценка: {item.rating_1_to_5}/5 ·{" "}
+                              {item.is_answered ? "Ответ дан" : "Нет ответа"}
+                            </div>
+                            <div className="summary-text">
+                              Ответ: {item.user_answer || "-"}
+                            </div>
+                            <div className="summary-text">
+                              Фидбек: {item.short_feedback || "-"}
+                            </div>
+                            <div className="summary-text">
+                              Эталон: {item.correct_answer || "-"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+
             <div className="feedback-block">
-              <div className="feedback-title">Фидбек от GPT (опционально)</div>
+              <div className="feedback-title">Фидбек от GPT (JSON, опционально)</div>
               <textarea
                 rows="4"
                 value={feedback}
                 onChange={(event) => setFeedback(event.target.value)}
-                placeholder="Вставьте результат проверки от GPT"
+                placeholder="Вставьте JSON результата проверки"
               />
               <div className="form-actions">
                 <button
@@ -590,6 +707,10 @@ const Reviews = () => {
             const percent = part.total_reviews
               ? Math.min((part.completed_reviews / part.total_reviews) * 100, 100)
               : 0;
+            const ratingValue =
+              part.gpt_attempts_total > 0 && part.gpt_average_rating !== null
+                ? part.gpt_average_rating.toFixed(1)
+                : "-";
             return (
               <div key={part.reading_part_id} className="stats-card">
                 <div className="stats-header">
@@ -603,6 +724,9 @@ const Reviews = () => {
                 </div>
                 <div className="stats-summary">
                   {summaryPreview(part.summary)}
+                </div>
+                <div className="stats-meta">
+                  GPT: {ratingValue} / 5 · попыток {part.gpt_attempts_total}
                 </div>
                 <div className="progress-track">
                   <div
