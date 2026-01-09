@@ -37,38 +37,78 @@ const formatClock = (totalSeconds) => {
   return `${padded(minutes)}:${padded(seconds)}`;
 };
 
-const buildPomodoroPlan = (totalMinutes, workMinutes, breakMinutes) => {
-  const safeTotal = Math.max(totalMinutes, 0);
+const buildPomodoroPlan = (workGoalMinutes, workMinutes, breakMinutes) => {
+  const safeTotal = Math.max(workGoalMinutes, 0);
   const safeWork = Math.max(workMinutes, 1);
   const safeBreak = Math.max(breakMinutes, 0);
   const segments = [];
-  let remaining = safeTotal;
-  let isWork = true;
+  let remainingWork = safeTotal;
   let workTotal = 0;
-  while (remaining > 0) {
-    const segmentMinutes = isWork ? safeWork : safeBreak;
-    if (segmentMinutes <= 0) {
-      if (!isWork) {
-        isWork = true;
-        continue;
-      }
-      break;
-    }
-    const duration = Math.min(segmentMinutes, remaining);
+  while (remainingWork > 0) {
+    const duration = Math.min(safeWork, remainingWork);
     if (duration <= 0) {
       break;
     }
-    if (isWork) {
-      workTotal += duration;
-    }
+    workTotal += duration;
     segments.push({
-      mode: isWork ? "work" : "break",
+      mode: "work",
       seconds: duration * 60,
     });
-    remaining -= duration;
-    isWork = !isWork;
+    remainingWork -= duration;
+    if (remainingWork > 0 && safeBreak > 0) {
+      segments.push({
+        mode: "break",
+        seconds: safeBreak * 60,
+      });
+    }
   }
   return { segments, workTotal };
+};
+
+const calculatePomodoroState = (segments, elapsedMs) => {
+  if (!segments.length) {
+    return {
+      segmentIndex: 0,
+      pomodoroSeconds: 0,
+      mode: "work",
+      sessionSeconds: 0,
+      done: true,
+    };
+  }
+  const safeElapsedMs = Math.max(elapsedMs, 0);
+  let workSeconds = 0;
+  let accumulatedMs = 0;
+  for (let index = 0; index < segments.length; index += 1) {
+    const segment = segments[index];
+    const segmentMs = segment.seconds * 1000;
+    const segmentEndMs = accumulatedMs + segmentMs;
+    if (safeElapsedMs >= segmentEndMs) {
+      if (segment.mode === "work") {
+        workSeconds += segment.seconds;
+      }
+      accumulatedMs = segmentEndMs;
+      continue;
+    }
+    const elapsedInSegmentMs = Math.max(0, safeElapsedMs - accumulatedMs);
+    if (segment.mode === "work") {
+      workSeconds += Math.floor(elapsedInSegmentMs / 1000);
+    }
+    const remainingMs = Math.max(segmentMs - elapsedInSegmentMs, 0);
+    return {
+      segmentIndex: index,
+      pomodoroSeconds: Math.ceil(remainingMs / 1000),
+      mode: segment.mode,
+      sessionSeconds: workSeconds,
+      done: false,
+    };
+  }
+  return {
+    segmentIndex: segments.length,
+    pomodoroSeconds: 0,
+    mode: segments[segments.length - 1].mode,
+    sessionSeconds: workSeconds,
+    done: true,
+  };
 };
 
 const ReadingSession = () => {
@@ -104,8 +144,7 @@ const ReadingSession = () => {
   const termsRef = useRef(null);
   const sentencesRef = useRef(null);
   const freeformRef = useRef(null);
-  const pomodoroMsRef = useRef(0);
-  const sessionMsRef = useRef(0);
+  const elapsedMsRef = useRef(0);
   const lastTickRef = useRef(null);
   const sessionStartedRef = useRef(false);
 
@@ -183,32 +222,6 @@ const ReadingSession = () => {
     return () => clearTimeout(timerId);
   }, [showLastPageNotice]);
 
-  useEffect(() => {
-    if (!pomodoroRunning) {
-      lastTickRef.current = null;
-      return undefined;
-    }
-    lastTickRef.current = performance.now();
-    const timerId = setInterval(() => {
-      const now = performance.now();
-      const lastTick = lastTickRef.current ?? now;
-      const deltaMs = now - lastTick;
-      lastTickRef.current = now;
-      if (deltaMs <= 0) {
-        return;
-      }
-      const currentRemainingMs = pomodoroMsRef.current;
-      const nextRemainingMs = Math.max(0, currentRemainingMs - deltaMs);
-      if (pomodoroMode === "work") {
-        const workDelta = Math.min(deltaMs, currentRemainingMs);
-        sessionMsRef.current += workDelta;
-        setSessionSeconds(Math.floor(sessionMsRef.current / 1000));
-      }
-      pomodoroMsRef.current = nextRemainingMs;
-      setPomodoroSeconds(Math.ceil(nextRemainingMs / 1000));
-    }, 250);
-    return () => clearInterval(timerId);
-  }, [pomodoroRunning, pomodoroMode]);
 
   const sessionPlanMinutes = useMemo(() => {
     const day = new Date().getDay();
@@ -228,36 +241,70 @@ const ReadingSession = () => {
   );
   const planSegments = pomodoroPlan.segments;
   const sessionTargetMinutes = pomodoroPlan.workTotal;
+  const planTotalMs = useMemo(
+    () =>
+      planSegments.reduce(
+        (total, segment) => total + segment.seconds * 1000,
+        0
+      ),
+    [planSegments]
+  );
 
   useEffect(() => {
-    if (!pomodoroRunning || pomodoroSeconds > 0 || !planSegments.length) {
-      return;
+    if (!pomodoroRunning) {
+      lastTickRef.current = null;
+      return undefined;
     }
-    setSegmentIndex((prev) => prev + 1);
-  }, [pomodoroRunning, pomodoroSeconds, planSegments.length]);
+    lastTickRef.current = performance.now();
+    const timerId = setInterval(() => {
+      const now = performance.now();
+      const lastTick = lastTickRef.current ?? now;
+      const deltaMs = now - lastTick;
+      lastTickRef.current = now;
+      if (deltaMs <= 0 || planTotalMs <= 0) {
+        return;
+      }
+      const nextElapsedMs = Math.min(
+        planTotalMs,
+        elapsedMsRef.current + deltaMs
+      );
+      elapsedMsRef.current = nextElapsedMs;
+      const state = calculatePomodoroState(planSegments, nextElapsedMs);
+      setPomodoroMode(state.mode);
+      setPomodoroSeconds(state.pomodoroSeconds);
+      setSegmentIndex(state.segmentIndex);
+      setSessionSeconds(state.sessionSeconds);
+      if (state.done) {
+        setPomodoroRunning(false);
+        sessionStartedRef.current = false;
+      }
+    }, 250);
+    return () => clearInterval(timerId);
+  }, [pomodoroRunning, planSegments, planTotalMs]);
 
   useEffect(() => {
     if (!planSegments.length) {
-      setPomodoroMode("work");
-      setPomodoroSeconds(0);
-      setSegmentIndex(0);
+      elapsedMsRef.current = 0;
+      const state = calculatePomodoroState([], 0);
+      setPomodoroMode(state.mode);
+      setPomodoroSeconds(state.pomodoroSeconds);
+      setSegmentIndex(state.segmentIndex);
+      setSessionSeconds(state.sessionSeconds);
       setPomodoroRunning(false);
-      pomodoroMsRef.current = 0;
       sessionStartedRef.current = false;
       return;
     }
-    if (segmentIndex >= planSegments.length) {
-      setPomodoroRunning(false);
-      setPomodoroSeconds(0);
-      pomodoroMsRef.current = 0;
-      sessionStartedRef.current = false;
+    if (pomodoroRunning) {
       return;
     }
-    const segment = planSegments[segmentIndex];
-    setPomodoroMode(segment.mode);
-    setPomodoroSeconds(segment.seconds);
-    pomodoroMsRef.current = segment.seconds * 1000;
-  }, [planSegments, segmentIndex]);
+    const clampedElapsed = Math.min(elapsedMsRef.current, planTotalMs);
+    elapsedMsRef.current = clampedElapsed;
+    const state = calculatePomodoroState(planSegments, clampedElapsed);
+    setPomodoroMode(state.mode);
+    setPomodoroSeconds(state.pomodoroSeconds);
+    setSegmentIndex(state.segmentIndex);
+    setSessionSeconds(state.sessionSeconds);
+  }, [planSegments, planTotalMs, pomodoroRunning]);
 
   useEffect(() => {
     const refMap = {
@@ -316,7 +363,12 @@ const ReadingSession = () => {
       return;
     }
     if (pomodoroSeconds === 0) {
-      setSegmentIndex(0);
+      elapsedMsRef.current = 0;
+      const state = calculatePomodoroState(planSegments, 0);
+      setPomodoroMode(state.mode);
+      setPomodoroSeconds(state.pomodoroSeconds);
+      setSegmentIndex(state.segmentIndex);
+      setSessionSeconds(state.sessionSeconds);
     }
     if (!sessionStartedRef.current) {
       if (lastPageEnd !== null) {
@@ -329,7 +381,12 @@ const ReadingSession = () => {
 
   const resetPomodoro = () => {
     setPomodoroRunning(false);
-    setSegmentIndex(0);
+    elapsedMsRef.current = 0;
+    const state = calculatePomodoroState(planSegments, 0);
+    setPomodoroMode(state.mode);
+    setPomodoroSeconds(state.pomodoroSeconds);
+    setSegmentIndex(state.segmentIndex);
+    setSessionSeconds(state.sessionSeconds);
     sessionStartedRef.current = false;
     setShowLastPageNotice(false);
   };
@@ -483,7 +540,7 @@ const ReadingSession = () => {
     setPageEnd("");
     setCreatedPart(null);
     setSessionSeconds(0);
-    sessionMsRef.current = 0;
+    elapsedMsRef.current = 0;
     sessionStartedRef.current = false;
     setShowLastPageNotice(false);
     resetPomodoro();
