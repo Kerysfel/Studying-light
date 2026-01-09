@@ -383,6 +383,64 @@
   animation-delay: var(--delay, 0s);
 }
 
+.book-card {
+  gap: 14px;
+}
+
+.book-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.status-pill {
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
+.status-pill.status-active {
+  background: rgba(46, 125, 84, 0.15);
+  color: #1f5c3a;
+}
+
+.status-pill.status-archived {
+  background: rgba(109, 117, 132, 0.18);
+  color: #3b4252;
+}
+
+.book-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+.book-stat {
+  background: var(--color-surface);
+  border-radius: 14px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border-soft);
+  display: grid;
+  gap: 6px;
+}
+
+.book-stat-wide {
+  grid-column: span 2;
+}
+
+.book-stat-label {
+  font-size: 12px;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.book-stat-value {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--color-slate);
+}
+
 .card-title {
   font-weight: 600;
 }
