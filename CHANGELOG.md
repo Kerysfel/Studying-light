@@ -7,6 +7,22 @@ Semantic Versioning.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-01-09
+
+### Added
+
+- GPT review check prompt now returns structured JSON feedback with ratings and stats.
+
+### Changed
+
+- Spaced repetition generation prompt updated with stricter JSON output rules.
+- Reading session timer now stays in sync with pomodoro timing and targets work-only minutes.
+- Books page shows a clearer stats layout and separates the add-book form.
+
+### Fixed
+
+- Pages read totals no longer sum legacy progress with current page_end values.
+
 ## [0.3.0] - 2026-01-08
 
 ### Added
