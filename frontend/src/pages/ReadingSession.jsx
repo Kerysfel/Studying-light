@@ -418,17 +418,17 @@ const ReadingSession = () => {
     const replacements = {
       book_title: selectedBookTitle || "-",
       part_index: promptPartIndex ? String(promptPartIndex) : "-",
-      label: label.trim() || "-",
-      keywords: keywords
+      part_label: label.trim() || "-",
+      notes_keywords: keywords
         ? keywords
             .split(",")
             .map((item) => item.trim())
             .filter(Boolean)
             .join(", ")
         : "-",
-      terms: termLines.length > 0 ? termLines.join("\n") : "-",
-      sentences: splitLines(sentences).join("\n") || "-",
-      freeform: splitLines(freeform).join("\n") || "-",
+      notes_terms: termLines.length > 0 ? termLines.join("\n") : "-",
+      notes_sentences: splitLines(sentences).join("\n") || "-",
+      notes_free: splitLines(freeform).join("\n") || "-",
     };
     let rendered = promptText;
     Object.entries(replacements).forEach(([key, value]) => {
