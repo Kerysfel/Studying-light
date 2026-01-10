@@ -889,6 +889,35 @@ select {
   font-family: var(--font-sans);
 }
 
+.prompt-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.prompt-block {
+  display: grid;
+  gap: 12px;
+}
+
+.prompt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.prompt-title {
+  font-weight: 600;
+  color: var(--color-slate);
+}
+
+.code-area {
+  font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono",
+    monospace;
+  line-height: 1.4;
+  tab-size: 4;
+}
+
 .danger-button {
   border: 1px solid rgba(221, 76, 57, 0.3);
   background: rgba(221, 76, 57, 0.12);

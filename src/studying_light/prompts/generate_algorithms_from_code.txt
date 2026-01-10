@@ -1,0 +1,46 @@
+You extract algorithms from the provided code or pseudocode.
+Return ONLY valid JSON. No markdown, no extra commentary.
+
+Output schema:
+{
+  "group_suggestions": ["string"],
+  "algorithms": [
+    {
+      "title": "string",
+      "summary": "string",
+      "when_to_use": "string",
+      "complexity": "string",
+      "invariants": ["string"],
+      "steps": ["string"],
+      "corner_cases": ["string"],
+      "review_questions_by_interval": {
+        "1": ["string"],
+        "7": ["string"],
+        "16": ["string"],
+        "35": ["string"],
+        "90": ["string"]
+      },
+      "code": {
+        "code_kind": "pseudocode|code",
+        "language": "string",
+        "code_text": "string"
+      },
+      "suggested_group": "string"
+    }
+  ]
+}
+
+Rules:
+1) Use only algorithms present in the input code. Do not invent algorithms.
+2) Each interval must contain at least one review question.
+3) Questions must target meaning, invariants, steps, corner cases, and when to use.
+4) If nothing qualifies, return: {"group_suggestions": [], "algorithms": []}
+
+Context:
+Book: {{book_title}}
+Part: {{part_index}}
+Label: {{part_label}}
+Code language: {{code_language}}
+
+[Code or pseudocode]
+{{code_text}}

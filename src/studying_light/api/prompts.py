@@ -7,7 +7,11 @@ from fastapi.responses import PlainTextResponse
 
 router: APIRouter = APIRouter()
 
-ALLOWED_PROMPTS: set[str] = {"generate_summary_and_questions", "check_answers"}
+ALLOWED_PROMPTS: set[str] = {
+    "generate_summary_and_questions",
+    "check_answers",
+    "generate_algorithms_from_code",
+}
 
 
 @router.get("/prompts/{name}", response_class=PlainTextResponse)
