@@ -25,6 +25,67 @@ class GptQuestionsByInterval(RootModel[dict[int, list[str]]]):
     """Questions grouped by interval days."""
 
 
+class AlgorithmReviewQuestionsByInterval(RootModel[dict[int, list[str]]]):
+    """Algorithm review questions grouped by interval days."""
+
+
+class AlgorithmCodePayload(BaseModel):
+    """Algorithm code payload."""
+
+    code_kind: str
+    language: str
+    code_text: str
+
+    @field_validator("code_kind", "language", "code_text")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        """Ensure string fields are not empty."""
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
+
+
+class AlgorithmGroupPayload(BaseModel):
+    """Algorithm group payload."""
+
+    title: str
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """Ensure group title is not empty."""
+        if not value.strip():
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmImportItem(BaseModel):
+    """Algorithm import payload item."""
+
+    title: str
+    summary: str
+    when_to_use: str
+    complexity: str
+    invariants: list[str]
+    steps: list[str]
+    corner_cases: list[str]
+    review_questions_by_interval: AlgorithmReviewQuestionsByInterval
+    code: AlgorithmCodePayload
+    suggested_group: str | None = None
+    group_title: str | None = None
+    source_part_id: int | None = None
+
+    @field_validator("title", "summary", "when_to_use", "complexity")
+    @classmethod
+    def validate_required_strings(cls, value: str) -> str:
+        """Ensure required strings are not empty."""
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
+
+
 class GptReviewMeta(BaseModel):
     """Metadata for GPT review checks."""
 

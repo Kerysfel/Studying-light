@@ -2,9 +2,11 @@
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from studying_light.api.v1.structures import (
+    AlgorithmGroupPayload,
+    AlgorithmImportItem,
     GptQuestionsByInterval,
     GptReviewResult,
     RawNotes,
@@ -273,11 +275,51 @@ class ImportGptResponse(BaseModel):
     review_items: list[ReviewItemOut]
 
 
+class AlgorithmImportPayload(BaseModel):
+    """Algorithm import payload."""
+
+    groups: list[AlgorithmGroupPayload] = Field(default_factory=list)
+    algorithms: list[AlgorithmImportItem]
+
+    @field_validator("algorithms")
+    @classmethod
+    def validate_algorithms(
+        cls,
+        value: list[AlgorithmImportItem],
+    ) -> list[AlgorithmImportItem]:
+        """Ensure algorithms list is not empty."""
+        if not value:
+            raise ValueError("algorithms cannot be empty")
+        return value
+
+
+class AlgorithmImportResponse(BaseModel):
+    """Algorithm import response."""
+
+    groups_created: int
+    algorithms_created: int
+    review_items_created: int
+
+
+class AlgorithmReviewItemOut(BaseModel):
+    """Algorithm review item response."""
+
+    id: int
+    algorithm_id: int
+    interval_days: int
+    due_date: date
+    status: str
+    group_id: int
+    group_title: str
+    title: str
+
+
 class TodayResponse(BaseModel):
     """Dashboard response for today."""
 
     active_books: list[BookProgressOut]
     review_items: list[ReviewItemOut]
+    algorithm_review_items: list[AlgorithmReviewItemOut]
     review_progress: ReviewProgressOut
 
 
