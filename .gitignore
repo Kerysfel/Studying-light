@@ -152,3 +152,5 @@ __marimo__/
 AGENTS.md
 
 *.db 
+
+.DS_store

@@ -9,23 +9,55 @@
 Studying Light — легкий помощник для чтения и повторений. Отслеживайте книги,
 делите их на части и планируйте повторения, чтобы лучше удерживать прочитанное.
 
-![Screenshot](docs/image.png)
+![Dashboard](docs/screenshots/01-dashboard.png)
 
 ## Возможности
 
-- Учет книг и частей с планированием повторений.
-- Сеансы чтения со статистикой и таймером в стиле Pomodoro.
+Есть сейчас:
+
+- Книги и части с прогрессом.
+- План повторений на сегодня.
+- Сессия чтения: помодоро + цель по времени.
+- Импорт JSON от GPT (сводка и вопросы).
+- Повторения с сохранением GPT-оценки (JSON).
 - Экспорт CSV/ZIP.
-- Локальное хранение в SQLite с резервными копиями.
-- Бэкенд на FastAPI и фронтенд на React.
+- SQLite + утилита бэкапа (`make backup`).
+
+В разработке:
+
+- Импорт алгоритмов в БД через UI.
+- Словарь алгоритмов (группы и карточки).
+- Тренировки кода (typing / по памяти).
+
+## Скриншоты
+
+### План на сегодня
+
+![Dashboard](docs/screenshots/01-dashboard.png)
+
+### Сессия чтения (Pomodoro + заметки)
+
+![Session](docs/screenshots/02-session.png)
+
+### Генерация промптов (теория и алгоритмы)
+
+![Prompts](docs/screenshots/03-prompts.png)
+
+### Импорт JSON от GPT
+
+![Import](docs/screenshots/04-import.png)
+
+### Повторение
+
+![Review](docs/screenshots/05-review.png)
 
 ## Документация
 
-- Архитектура: `docs/specs/architecture.md`
-- Модель данных: `docs/specs/data-model.md`
-- Правила повторений: `docs/specs/review-scheduling.md`
-- Границы API: `docs/specs/api-boundaries.md`
-- Хранение и бэкапы: `docs/database.md`
+- Архитектура — как устроено: `docs/specs/architecture.md`
+- Модель данных — таблицы/связи: `docs/specs/data-model.md`
+- Правила повторений — интервалы и статусы: `docs/specs/review-scheduling.md`
+- Границы API — что отдаёт фронту: `docs/specs/api-boundaries.md`
+- Хранение и бэкапы — операционные инструкции: `docs/database.md`
 
 ## Быстрый старт (Docker)
 
@@ -39,7 +71,9 @@ cp .env.example .env
 docker compose --env-file .env up --build
 ```
 
-Откройте `http://localhost:8000`.
+Данные SQLite сохраняются в `./data` и не теряются при перезапусках.
+
+Откройте `http://localhost:8000` (фронт и API).
 
 ## Быстрый старт (локально)
 
@@ -51,6 +85,8 @@ uv run uvicorn studying_light.main:app --reload
 
 Откройте `http://localhost:8000`.
 
+По умолчанию данные лежат в `data/app.db`.
+
 Необязательный dev-сервер фронтенда:
 
 ```bash
@@ -58,6 +94,15 @@ cd frontend
 npm install
 npm run dev
 ```
+
+Фронтенд будет доступен на `http://localhost:5173`.
+
+## Как пользоваться
+
+1) Создайте книгу (раздел “Книги”).
+2) Start session → заметки → “Сгенерировать промпт”.
+3) Вставьте промпт в ChatGPT, затем вставьте JSON в “Импорт JSON”.
+4) Откройте “Повторения” → Start review → ответы → (опционально) GPT check.
 
 ## API (справка)
 
@@ -151,7 +196,7 @@ curl http://localhost:8000/api/v1/today
 
 - Issues: используйте GitHub Issues для багов и запросов функций.
 - Discussions: используйте GitHub Discussions для вопросов.
-- Security: пишите на `newerasowwor@gmail.com`.
+- Security: используйте GitHub Security Advisories (private).
 
 ## Лицензия
 
