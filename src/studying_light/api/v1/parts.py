@@ -6,8 +6,13 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from studying_light.api.v1.schemas import ImportGptPayload, ImportGptResponse
-from studying_light.api.v1.schemas import ReadingPartCreate, ReadingPartOut, ReviewItemOut
+from studying_light.api.v1.schemas import (
+    ImportGptPayload,
+    ImportGptResponse,
+    ReadingPartCreate,
+    ReadingPartOut,
+    ReviewItemOut,
+)
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
@@ -131,11 +136,15 @@ def list_parts(
             detail={"detail": "book_id is required", "code": "BAD_REQUEST"},
         )
 
-    parts = session.execute(
-        select(ReadingPart)
-        .where(ReadingPart.book_id == book_id)
-        .order_by(ReadingPart.part_index)
-    ).scalars().all()
+    parts = (
+        session.execute(
+            select(ReadingPart)
+            .where(ReadingPart.book_id == book_id)
+            .order_by(ReadingPart.part_index)
+        )
+        .scalars()
+        .all()
+    )
     return [ReadingPartOut.model_validate(part) for part in parts]
 
 
@@ -157,9 +166,15 @@ def import_gpt(
     questions_by_interval = payload.gpt_questions_by_interval.root
     part.gpt_questions_by_interval = questions_by_interval
 
-    existing_items = session.execute(
-        select(ReviewScheduleItem).where(ReviewScheduleItem.reading_part_id == part_id)
-    ).scalars().all()
+    existing_items = (
+        session.execute(
+            select(ReviewScheduleItem).where(
+                ReviewScheduleItem.reading_part_id == part_id
+            )
+        )
+        .scalars()
+        .all()
+    )
     for item in existing_items:
         session.delete(item)
 
@@ -179,14 +194,14 @@ def import_gpt(
 
     try:
         interval_values = [int(value) for value in intervals]
-    except (TypeError, ValueError):
+    except (TypeError, ValueError) as exc:
         raise HTTPException(
             status_code=422,
             detail={
                 "detail": "Invalid intervals configuration",
                 "code": "IMPORT_PAYLOAD_INVALID",
             },
-        )
+        ) from exc
 
     for interval_value in interval_values:
         questions = questions_by_interval.get(interval_value)

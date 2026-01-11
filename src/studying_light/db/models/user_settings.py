@@ -1,6 +1,6 @@
 """User settings model."""
 
-from sqlalchemy import Integer, JSON, String
+from sqlalchemy import JSON, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column
 
 from studying_light.db.base import Base

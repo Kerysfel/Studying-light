@@ -219,7 +219,10 @@ def complete_algorithm_review(
     if not algorithm or not group:
         raise HTTPException(
             status_code=404,
-            detail={"detail": "Related algorithm or group not found", "code": "NOT_FOUND"},
+            detail={
+                "detail": "Related algorithm or group not found",
+                "code": "NOT_FOUND",
+            },
         )
 
     return _build_algorithm_review_item_out(review_item, algorithm, group)

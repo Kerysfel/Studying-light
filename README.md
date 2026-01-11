@@ -6,18 +6,18 @@
 [![Release](https://img.shields.io/github/v/release/Kerysfel/Studying-light)](https://github.com/Kerysfel/Studying-light/releases)
 [![Docker Image](https://img.shields.io/badge/docker-ghcr.io%2FKerysfel%2Fstudying--light-2496ed?logo=docker)](https://github.com/Kerysfel/Studying-light/pkgs/container/studying-light)
 
-Studying Light is a lightweight reading and review companion. Track books,
-split them into parts, and schedule reviews so you keep what you read.
+Studying Light — легкий помощник для чтения и повторений. Отслеживайте книги,
+делите их на части и планируйте повторения, чтобы лучше удерживать прочитанное.
 
 ![Screenshot](docs/image.png)
 
-## Features
+## Возможности
 
-- Book and part tracking with review scheduling.
-- Reading sessions with stats and a Pomodoro-style timer.
-- CSV/ZIP export.
-- Local-first SQLite storage with backups.
-- FastAPI backend and a React frontend.
+- Учет книг и частей с планированием повторений.
+- Сеансы чтения со статистикой и таймером в стиле Pomodoro.
+- Экспорт CSV/ZIP.
+- Локальное хранение в SQLite с резервными копиями.
+- Бэкенд на FastAPI и фронтенд на React.
 
 ## Документация
 
@@ -27,21 +27,21 @@ split them into parts, and schedule reviews so you keep what you read.
 - Границы API: `docs/specs/api-boundaries.md`
 - Хранение и бэкапы: `docs/database.md`
 
-## Quickstart (Docker)
+## Быстрый старт (Docker)
 
 ```bash
 cp .env.example .env
 ```
 
-Edit `.env` if needed, then:
+При необходимости отредактируйте `.env`, затем:
 
 ```bash
 docker compose --env-file .env up --build
 ```
 
-Open `http://localhost:8000`.
+Откройте `http://localhost:8000`.
 
-## Quickstart (Local)
+## Быстрый старт (локально)
 
 ```bash
 uv sync --extra dev
@@ -49,9 +49,9 @@ uv run alembic upgrade head
 uv run uvicorn studying_light.main:app --reload
 ```
 
-Open `http://localhost:8000`.
+Откройте `http://localhost:8000`.
 
-Optional frontend dev server:
+Необязательный dev-сервер фронтенда:
 
 ```bash
 cd frontend
@@ -129,30 +129,30 @@ curl http://localhost:8000/api/v1/today
 }
 ```
 
-## Configuration
+## Конфигурация
 
-Defaults below are from `.env.example`.
+Значения по умолчанию ниже взяты из `.env.example`.
 
-| Variable  | Default            | Notes                                                        |
-| --------- | ------------------ | ------------------------------------------------------------ |
-| `APP_ENV` | `local`            | Environment label.                                           |
-| `DB_PATH` | `/data/app.db`     | Docker default. If unset locally, defaults to `data/app.db`. |
-| `TZ`      | `Europe/Amsterdam` | Container timezone.                                          |
+| Переменная | По умолчанию       | Примечания                                                   |
+| ---------- | ------------------ | ------------------------------------------------------------ |
+| `APP_ENV`  | `local`            | Метка окружения.                                             |
+| `DB_PATH`  | `/data/app.db`     | Значение для Docker. Если локально не задано, то `data/app.db`. |
+| `TZ`       | `Europe/Amsterdam` | Часовой пояс контейнера.                                     |
 
-Optional:
+Необязательно:
 
-- `DATABASE_URL`: overrides `DB_PATH` when set.
+- `DATABASE_URL`: переопределяет `DB_PATH`, если задана.
 
-## Project status
+## Статус проекта
 
-Status: beta (active development). Interfaces may change.
+Статус: beta (активная разработка). Интерфейсы могут меняться.
 
-## Support
+## Поддержка
 
-- Issues: use GitHub Issues for bugs and feature requests.
-- Discussions: use GitHub Discussions for questions.
-- Security: email `newerasowwor@gmail.com`.
+- Issues: используйте GitHub Issues для багов и запросов функций.
+- Discussions: используйте GitHub Discussions для вопросов.
+- Security: пишите на `newerasowwor@gmail.com`.
 
-## License
+## Лицензия
 
-MIT. See `LICENSE`.
+MIT. См. `LICENSE`.

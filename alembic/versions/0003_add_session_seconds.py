@@ -5,8 +5,9 @@ Revises: 0002_add_pages_fields
 Create Date: 2026-01-06 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0003_add_session_seconds"
 down_revision = "0002_add_pages_fields"

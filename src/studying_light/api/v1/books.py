@@ -87,9 +87,7 @@ def list_books(session: Session = Depends(get_session)) -> list[BookStatsOut]:
     books = session.execute(select(Book).order_by(Book.id)).scalars().all()
     book_ids = [book.id for book in books]
     pages_by_book, stats_by_book = _collect_book_stats(session, book_ids)
-    return [
-        _build_book_stats_out(book, pages_by_book, stats_by_book) for book in books
-    ]
+    return [_build_book_stats_out(book, pages_by_book, stats_by_book) for book in books]
 
 
 @router.post("/books", status_code=status.HTTP_201_CREATED)
@@ -149,7 +147,9 @@ def update_book(
 
 
 @router.delete("/books/{book_id}")
-def delete_book(book_id: int, session: Session = Depends(get_session)) -> dict[str, str]:
+def delete_book(
+    book_id: int, session: Session = Depends(get_session)
+) -> dict[str, str]:
     """Delete a book."""
     book = session.get(Book, book_id)
     if not book:
@@ -158,15 +158,21 @@ def delete_book(book_id: int, session: Session = Depends(get_session)) -> dict[s
             detail={"detail": "Book not found", "code": "NOT_FOUND"},
         )
 
-    part_ids = session.execute(
-        select(ReadingPart.id).where(ReadingPart.book_id == book_id)
-    ).scalars().all()
+    part_ids = (
+        session.execute(select(ReadingPart.id).where(ReadingPart.book_id == book_id))
+        .scalars()
+        .all()
+    )
     if part_ids:
-        review_item_ids = session.execute(
-            select(ReviewScheduleItem.id).where(
-                ReviewScheduleItem.reading_part_id.in_(part_ids)
+        review_item_ids = (
+            session.execute(
+                select(ReviewScheduleItem.id).where(
+                    ReviewScheduleItem.reading_part_id.in_(part_ids)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         if review_item_ids:
             session.execute(
                 delete(ReviewAttempt).where(

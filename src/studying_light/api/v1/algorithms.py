@@ -1,13 +1,16 @@
 """Algorithm import endpoints."""
 
-from datetime import date, timedelta
 import logging
+from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from studying_light.api.v1.schemas import AlgorithmImportPayload, AlgorithmImportResponse
+from studying_light.api.v1.schemas import (
+    AlgorithmImportPayload,
+    AlgorithmImportResponse,
+)
 from studying_light.db.models.algorithm import Algorithm
 from studying_light.db.models.algorithm_code_snippet import AlgorithmCodeSnippet
 from studying_light.db.models.algorithm_group import AlgorithmGroup
@@ -74,9 +77,13 @@ def import_algorithms(
         if title and title not in required_titles:
             required_titles.append(title)
 
-    existing_groups = session.execute(
-        select(AlgorithmGroup).where(AlgorithmGroup.title.in_(required_titles))
-    ).scalars().all()
+    existing_groups = (
+        session.execute(
+            select(AlgorithmGroup).where(AlgorithmGroup.title.in_(required_titles))
+        )
+        .scalars()
+        .all()
+    )
     groups_by_title: dict[str, AlgorithmGroup] = {
         group.title: group for group in existing_groups
     }

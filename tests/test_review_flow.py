@@ -69,9 +69,15 @@ def test_part_import_creates_reviews_and_today(
         due_date = date.fromisoformat(item["due_date"])
         assert due_date == expected_due[interval]
 
-    stored_items = session.execute(
-        select(ReviewScheduleItem).where(ReviewScheduleItem.reading_part_id == part_id)
-    ).scalars().all()
+    stored_items = (
+        session.execute(
+            select(ReviewScheduleItem).where(
+                ReviewScheduleItem.reading_part_id == part_id
+            )
+        )
+        .scalars()
+        .all()
+    )
     questions_by_interval = {
         item.interval_days: item.questions for item in stored_items
     }

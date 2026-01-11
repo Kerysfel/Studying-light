@@ -5,9 +5,9 @@ from datetime import date, datetime
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from studying_light.api.v1.structures import (
+    AlgorithmGptReviewResult,
     AlgorithmGroupPayload,
     AlgorithmImportItem,
-    AlgorithmGptReviewResult,
     GptQuestionsByInterval,
     GptReviewResult,
     RawNotes,
@@ -435,4 +435,3 @@ class SettingsUpdate(BaseModel):
         if any(interval <= 0 for interval in value):
             raise ValueError("intervals_days must be positive")
         return value
-

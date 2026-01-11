@@ -2,8 +2,8 @@
 
 from fastapi import APIRouter
 
-from studying_light.api.v1.algorithms import router as algorithms_router
 from studying_light.api.v1.algorithm_reviews import router as algorithm_reviews_router
+from studying_light.api.v1.algorithms import router as algorithms_router
 from studying_light.api.v1.books import router as books_router
 from studying_light.api.v1.dashboard import router as dashboard_router
 from studying_light.api.v1.export import router as export_router

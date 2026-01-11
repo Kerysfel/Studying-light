@@ -28,7 +28,7 @@ def _build_review_item_out(
     item: ReviewScheduleItem,
     part: ReadingPart,
     book: Book,
-    ) -> ReviewItemOut:
+) -> ReviewItemOut:
     """Build review item response."""
     return ReviewItemOut(
         id=item.id,
@@ -64,9 +64,11 @@ def _build_algorithm_review_item_out(
 @router.get("/today")
 def today(session: Session = Depends(get_session)) -> TodayResponse:
     """Return today's reading plan and reviews."""
-    active_books = session.execute(
-        select(Book).where(Book.status == "active").order_by(Book.id)
-    ).scalars().all()
+    active_books = (
+        session.execute(select(Book).where(Book.status == "active").order_by(Book.id))
+        .scalars()
+        .all()
+    )
 
     book_ids = [book.id for book in active_books]
     pages_by_book: dict[int, int] = {}
@@ -97,8 +99,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
     ).all()
 
     review_items = [
-        _build_review_item_out(item, part, book)
-        for item, part, book in review_rows
+        _build_review_item_out(item, part, book) for item, part, book in review_rows
     ]
 
     algorithm_review_rows = session.execute(
@@ -117,9 +118,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         for item, algorithm, group in algorithm_review_rows
     ]
 
-    review_total = session.execute(
-        select(func.count(ReviewScheduleItem.id))
-    ).scalar()
+    review_total = session.execute(select(func.count(ReviewScheduleItem.id))).scalar()
     review_completed = session.execute(
         select(func.count(ReviewScheduleItem.id)).where(
             ReviewScheduleItem.status == "done"

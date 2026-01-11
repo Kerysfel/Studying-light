@@ -31,8 +31,8 @@ config.set_main_option("sqlalchemy.url", build_database_url())
 
 target_metadata: MetaData | None = None
 try:
-    from studying_light.db.base import Base
     import studying_light.db.models as models
+    from studying_light.db.base import Base
 
     target_metadata = Base.metadata
     _ = models

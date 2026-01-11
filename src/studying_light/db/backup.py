@@ -57,7 +57,10 @@ def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Create a SQLite database backup.")
     parser.add_argument(
         "--output-dir",
-        help="Directory for backup files. Defaults to a 'backups' folder next to the DB.",
+        help=(
+            "Directory for backup files. Defaults to a 'backups' folder "
+            "next to the DB."
+        ),
     )
     return parser.parse_args()
 

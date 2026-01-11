@@ -79,9 +79,7 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
         )
 
     parts = (
-        session.execute(select(ReadingPart).order_by(ReadingPart.id))
-        .scalars()
-        .all()
+        session.execute(select(ReadingPart).order_by(ReadingPart.id)).scalars().all()
     )
     for part in parts:
         rows.append(
@@ -151,9 +149,7 @@ def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
     """Export data as a ZIP archive with CSV files."""
     books = session.execute(select(Book).order_by(Book.id)).scalars().all()
     parts = (
-        session.execute(select(ReadingPart).order_by(ReadingPart.id))
-        .scalars()
-        .all()
+        session.execute(select(ReadingPart).order_by(ReadingPart.id)).scalars().all()
     )
     reviews = (
         session.execute(select(ReviewScheduleItem).order_by(ReviewScheduleItem.id))

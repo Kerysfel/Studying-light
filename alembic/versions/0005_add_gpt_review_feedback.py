@@ -5,8 +5,9 @@ Revises: 0004_add_page_end
 Create Date: 2026-01-10 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0005_add_gpt_review_feedback"
 down_revision = "0004_add_page_end"

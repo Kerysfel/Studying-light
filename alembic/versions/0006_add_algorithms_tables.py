@@ -5,8 +5,9 @@ Revises: 0005_add_gpt_review_feedback
 Create Date: 2026-01-10 00:00:00.000000
 """
 
-from alembic import op
 import sqlalchemy as sa
+
+from alembic import op
 
 revision = "0006_add_algorithms_tables"
 down_revision = "0005_add_gpt_review_feedback"

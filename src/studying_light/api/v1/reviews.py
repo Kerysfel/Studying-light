@@ -95,15 +95,19 @@ def review_schedule(
         )
 
     today = date.today()
-    items = session.execute(
-        select(ReviewScheduleItem)
-        .where(
-            ReviewScheduleItem.reading_part_id == reading_part_id,
-            ReviewScheduleItem.status == "planned",
-            ReviewScheduleItem.due_date >= today,
+    items = (
+        session.execute(
+            select(ReviewScheduleItem)
+            .where(
+                ReviewScheduleItem.reading_part_id == reading_part_id,
+                ReviewScheduleItem.status == "planned",
+                ReviewScheduleItem.due_date >= today,
+            )
+            .order_by(ReviewScheduleItem.due_date)
         )
-        .order_by(ReviewScheduleItem.due_date)
-    ).scalars().all()
+        .scalars()
+        .all()
+    )
 
     return [
         ReviewScheduleItemOut(
@@ -172,9 +176,7 @@ def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStat
             Book.title,
             func.count(ReviewScheduleItem.id),
             func.coalesce(
-                func.sum(
-                    case((ReviewScheduleItem.status == "done", 1), else_=0)
-                ),
+                func.sum(case((ReviewScheduleItem.status == "done", 1), else_=0)),
                 0,
             ),
         )
