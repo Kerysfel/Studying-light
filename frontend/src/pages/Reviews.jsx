@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 
@@ -46,6 +46,25 @@ const Reviews = () => {
   const [scheduleLoading, setScheduleLoading] = useState(false);
   const [scheduleSaving, setScheduleSaving] = useState(false);
   const [scheduleError, setScheduleError] = useState("");
+
+  const [algorithmItems, setAlgorithmItems] = useState([]);
+  const [algorithmLoading, setAlgorithmLoading] = useState(false);
+  const [algorithmError, setAlgorithmError] = useState("");
+  const [algorithmDetail, setAlgorithmDetail] = useState(null);
+  const [algorithmAnswers, setAlgorithmAnswers] = useState({});
+  const [algorithmActionError, setAlgorithmActionError] = useState("");
+  const [algorithmSuccessMessage, setAlgorithmSuccessMessage] = useState("");
+  const [algorithmFeedback, setAlgorithmFeedback] = useState("");
+  const [algorithmFeedbackSaving, setAlgorithmFeedbackSaving] = useState(false);
+  const [algorithmShowGptFeedback, setAlgorithmShowGptFeedback] = useState(false);
+  const [algorithmPromptLoading, setAlgorithmPromptLoading] = useState(false);
+  const [algorithmPromptTemplate, setAlgorithmPromptTemplate] = useState("");
+  const [algorithmShowPrompt, setAlgorithmShowPrompt] = useState(false);
+  const [algorithmCopied, setAlgorithmCopied] = useState(false);
+
+  const [algorithmStats, setAlgorithmStats] = useState([]);
+  const [algorithmStatsLoading, setAlgorithmStatsLoading] = useState(false);
+  const [algorithmStatsError, setAlgorithmStatsError] = useState("");
 
   const statsRef = useRef(null);
 
@@ -105,6 +124,51 @@ const Reviews = () => {
     };
   }, []);
 
+  useEffect(() => {
+    let active = true;
+    const loadAlgorithmItems = async () => {
+      try {
+        setAlgorithmLoading(true);
+        const data = await request("/algorithm-reviews/today");
+        if (!active) {
+          return;
+        }
+        setAlgorithmItems(data);
+        setAlgorithmError("");
+      } catch (err) {
+        if (!active) {
+          return;
+        }
+        setAlgorithmError(getErrorMessage(err));
+      } finally {
+        if (active) {
+          setAlgorithmLoading(false);
+        }
+      }
+    };
+    loadAlgorithmItems();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const refreshAlgorithmStats = useCallback(async () => {
+    try {
+      setAlgorithmStatsLoading(true);
+      const data = await request("/algorithm-reviews/stats");
+      setAlgorithmStats(data);
+      setAlgorithmStatsError("");
+    } catch (err) {
+      setAlgorithmStatsError(getErrorMessage(err));
+    } finally {
+      setAlgorithmStatsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    refreshAlgorithmStats();
+  }, [refreshAlgorithmStats]);
+
   const questions = detail?.questions || [];
   const rawNotes = detail?.raw_notes || {};
   const noteKeywords = rawNotes.keywords || [];
@@ -119,6 +183,11 @@ const Reviews = () => {
   const gptFeedback = detail?.gpt_feedback || null;
   const gptOverall = gptFeedback?.overall || null;
   const gptItems = gptFeedback?.items || [];
+
+  const algorithmQuestions = algorithmDetail?.questions || [];
+  const algorithmGptFeedback = algorithmDetail?.gpt_feedback || null;
+  const algorithmOverall = algorithmGptFeedback?.overall || null;
+  const algorithmGptItems = algorithmGptFeedback?.items || [];
 
   const summaryPreview = (textValue) => {
     if (!textValue) {
@@ -231,8 +300,43 @@ const Reviews = () => {
     }
   };
 
+  const handleStartAlgorithmReview = async (reviewId) => {
+    setAlgorithmActionError("");
+    setAlgorithmSuccessMessage("");
+    setAlgorithmShowPrompt(false);
+    setAlgorithmCopied(false);
+    setAlgorithmShowGptFeedback(false);
+    setAlgorithmFeedback("");
+    try {
+      const data = await request(`/algorithm-reviews/${reviewId}`);
+      setAlgorithmDetail(data);
+      const nextAnswers = {};
+      data.questions.forEach((question, index) => {
+        nextAnswers[index] = "";
+      });
+      setAlgorithmAnswers(nextAnswers);
+    } catch (err) {
+      setAlgorithmActionError(getErrorMessage(err));
+    }
+  };
+
+  const closeAlgorithmReview = () => {
+    setAlgorithmDetail(null);
+    setAlgorithmAnswers({});
+    setAlgorithmActionError("");
+    setAlgorithmSuccessMessage("");
+    setAlgorithmFeedback("");
+    setAlgorithmShowPrompt(false);
+    setAlgorithmCopied(false);
+    setAlgorithmShowGptFeedback(false);
+  };
+
   const handleAnswerChange = (index, value) => {
     setAnswers((prev) => ({ ...prev, [index]: value }));
+  };
+
+  const handleAlgorithmAnswerChange = (index, value) => {
+    setAlgorithmAnswers((prev) => ({ ...prev, [index]: value }));
   };
 
   const buildAnswerPayload = () => {
@@ -243,12 +347,45 @@ const Reviews = () => {
     return payload;
   };
 
+  const buildAlgorithmAnswerPayload = () => {
+    const payload = {};
+    algorithmQuestions.forEach((question, index) => {
+      payload[question] = algorithmAnswers[index] || "";
+    });
+    return payload;
+  };
+
   const hasMissingAnswers = useMemo(() => {
     if (!questions.length) {
       return false;
     }
     return questions.some((question, index) => !answers[index]?.trim());
   }, [questions, answers]);
+
+  const hasMissingAlgorithmAnswers = useMemo(() => {
+    if (!algorithmQuestions.length) {
+      return false;
+    }
+    return algorithmQuestions.some(
+      (question, index) => !algorithmAnswers[index]?.trim()
+    );
+  }, [algorithmQuestions, algorithmAnswers]);
+
+  const algorithmStatsByGroup = useMemo(() => {
+    const grouped = {};
+    algorithmStats.forEach((item) => {
+      const key = `${item.group_id}:${item.group_title}`;
+      if (!grouped[key]) {
+        grouped[key] = {
+          group_id: item.group_id,
+          group_title: item.group_title,
+          algorithms: [],
+        };
+      }
+      grouped[key].algorithms.push(item);
+    });
+    return Object.values(grouped);
+  }, [algorithmStats]);
 
   const buildCheckPrompt = () => {
     if (!promptTemplate || !detail) {
@@ -274,6 +411,49 @@ const Reviews = () => {
       qa_block: qaBlock || "-",
     };
     let rendered = promptTemplate;
+    Object.entries(replacements).forEach(([key, value]) => {
+      rendered = rendered.replaceAll(`{{${key}}}`, value);
+    });
+    return rendered;
+  };
+
+  const buildAlgorithmCheckPrompt = () => {
+    if (!algorithmPromptTemplate || !algorithmDetail) {
+      return "";
+    }
+    const qaBlock = algorithmQuestions
+      .map((question, index) => {
+        const answer = algorithmAnswers[index] || "-";
+        return `Вопрос: ${question}\nОтвет: ${answer}`;
+      })
+      .join("\n\n");
+    const reviewDate = new Date().toISOString().slice(0, 10);
+    const invariantsText = (algorithmDetail.invariants || [])
+      .map((item) => `- ${item}`)
+      .join("\n");
+    const stepsText = (algorithmDetail.steps || [])
+      .map((item) => `- ${item}`)
+      .join("\n");
+    const cornerCasesText = (algorithmDetail.corner_cases || [])
+      .map((item) => `- ${item}`)
+      .join("\n");
+    const replacements = {
+      group_title: algorithmDetail.group_title || "-",
+      algorithm_title: algorithmDetail.title || "-",
+      interval_days:
+        typeof algorithmDetail.interval_days === "number"
+          ? String(algorithmDetail.interval_days)
+          : "-",
+      review_date: reviewDate,
+      summary: algorithmDetail.summary || "-",
+      when_to_use: algorithmDetail.when_to_use || "-",
+      complexity: algorithmDetail.complexity || "-",
+      invariants: invariantsText || "-",
+      steps: stepsText || "-",
+      corner_cases: cornerCasesText || "-",
+      qa_block: qaBlock || "-",
+    };
+    let rendered = algorithmPromptTemplate;
     Object.entries(replacements).forEach(([key, value]) => {
       rendered = rendered.replaceAll(`{{${key}}}`, value);
     });
@@ -310,6 +490,41 @@ const Reviews = () => {
       setPromptLoading(false);
     }
   };
+
+  const handleCopyAlgorithmPrompt = async () => {
+    try {
+      await navigator.clipboard.writeText(buildAlgorithmCheckPrompt());
+      setAlgorithmCopied(true);
+      setTimeout(() => setAlgorithmCopied(false), 1600);
+    } catch (err) {
+      setAlgorithmActionError(
+        "Не удалось скопировать текст промпта."
+      );
+    }
+  };
+
+  const openAlgorithmCheckPrompt = async () => {
+    if (!algorithmDetail) {
+      setAlgorithmActionError("Выберите алгоритм для проверки.");
+      return;
+    }
+    setAlgorithmCopied(false);
+    setAlgorithmActionError("");
+    try {
+      setAlgorithmPromptLoading(true);
+      if (!algorithmPromptTemplate) {
+        const template = await requestText("/prompts/check_algorithm_answers");
+        setAlgorithmPromptTemplate(template);
+      }
+      setAlgorithmShowPrompt(true);
+    } catch (err) {
+      setAlgorithmActionError(getErrorMessage(err));
+    } finally {
+      setAlgorithmPromptLoading(false);
+    }
+  };
+
+
 
   const handleComplete = async () => {
     if (!detail) {
@@ -371,6 +586,74 @@ const Reviews = () => {
       setFeedbackSaving(false);
     }
   };
+
+  const handleAlgorithmComplete = async () => {
+    if (!algorithmDetail) {
+      return;
+    }
+    setAlgorithmActionError("");
+    setAlgorithmSuccessMessage("");
+    if (hasMissingAlgorithmAnswers) {
+      setAlgorithmActionError(
+        "Ответьте на все вопросы, затем завершите повторение."
+      );
+      return;
+    }
+    try {
+      await request(`/algorithm-reviews/${algorithmDetail.id}/complete`, {
+        method: "POST",
+        body: JSON.stringify({ answers: buildAlgorithmAnswerPayload() }),
+      });
+      setAlgorithmItems((prev) =>
+        prev.filter((item) => item.id !== algorithmDetail.id)
+      );
+    setAlgorithmDetail(null);
+    setAlgorithmAnswers({});
+    setAlgorithmSuccessMessage("Повторение алгоритма завершено.");
+    refreshAlgorithmStats();
+  } catch (err) {
+    setAlgorithmActionError(getErrorMessage(err));
+  }
+  };
+
+  const handleAlgorithmSaveFeedback = async () => {
+    if (!algorithmDetail) {
+      return;
+    }
+    if (!algorithmFeedback.trim()) {
+      setAlgorithmActionError("Вставьте фидбек перед сохранением.");
+      return;
+    }
+    let parsedFeedback = null;
+    try {
+      parsedFeedback = JSON.parse(algorithmFeedback);
+    } catch (err) {
+      setAlgorithmActionError("Некорректный JSON. Проверьте формат ответа.");
+      return;
+    }
+    if (!parsedFeedback || typeof parsedFeedback !== "object") {
+      setAlgorithmActionError("JSON должен быть объектом.");
+      return;
+    }
+    try {
+      setAlgorithmFeedbackSaving(true);
+      await request(`/algorithm-reviews/${algorithmDetail.id}/save_gpt_feedback`, {
+        method: "POST",
+        body: JSON.stringify({ gpt_check_result: parsedFeedback }),
+      });
+    setAlgorithmDetail((prev) =>
+      prev ? { ...prev, gpt_feedback: parsedFeedback } : prev
+    );
+    setAlgorithmSuccessMessage("Фидбек сохранен.");
+    refreshAlgorithmStats();
+  } catch (err) {
+      setAlgorithmActionError(getErrorMessage(err));
+    } finally {
+      setAlgorithmFeedbackSaving(false);
+    }
+  };
+
+
 
   return (
     <div className="page-grid">
@@ -673,7 +956,107 @@ const Reviews = () => {
 
       {!focusMode && (
         <section className="panel">
-        <div className="panel-header">
+          <div className="panel-header">
+            <div>
+              <h2>Алгоритмы</h2>
+              <p className="muted">План повторений и контроль по алгоритмам.</p>
+            </div>
+            <span className="badge blue">Алгоритмы</span>
+          </div>
+          {!algorithmDetail && algorithmSuccessMessage && (
+            <div className="alert success">{algorithmSuccessMessage}</div>
+          )}
+          {!algorithmDetail && algorithmActionError && (
+            <div className="alert error">{algorithmActionError}</div>
+          )}
+          {algorithmError && <div className="alert error">{algorithmError}</div>}
+          {algorithmLoading && <p className="muted">Загрузка алгоритмов...</p>}
+          {!algorithmLoading && algorithmItems.length === 0 && (
+            <div className="empty-state">
+              Пока нет алгоритмических повторений.
+            </div>
+          )}
+          <div className="list">
+            {algorithmItems.map((item) => (
+              <div key={item.id} className="list-row algorithm-list-item">
+                <div>
+                  <div className="list-title">{item.title}</div>
+                  <div className="list-meta">
+                    Группа {item.group_title} · Интервал {item.interval_days}{" "}
+                    дней · Дата: {formatDueDate(item.due_date)}
+                  </div>
+                </div>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => handleStartAlgorithmReview(item.id)}
+                >
+                  Начать повторение
+                </button>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!focusMode && (
+        <section className="panel">
+          <div className="panel-header">
+            <div>
+              <h2>Статистика алгоритмов</h2>
+              <p className="muted">
+                Прогресс и оценки по группам алгоритмов.
+              </p>
+            </div>
+            <span className="badge blue">Статистика</span>
+          </div>
+          {algorithmStatsError && (
+            <div className="alert error">{algorithmStatsError}</div>
+          )}
+          {algorithmStatsLoading && (
+            <p className="muted">Загрузка статистики...</p>
+          )}
+          {!algorithmStatsLoading && algorithmStatsByGroup.length === 0 && (
+            <div className="empty-state">Пока нет данных по алгоритмам.</div>
+          )}
+          <div className="summary-grid">
+            {algorithmStatsByGroup.map((group) => (
+              <div key={group.group_id} className="summary-card">
+                <div className="summary-title">Группа</div>
+                <div className="summary-value">{group.group_title}</div>
+                <div className="summary-muted">
+                  Алгоритмов: {group.algorithms.length}
+                </div>
+                <ul className="summary-list">
+                  {group.algorithms.map((algo) => {
+                    const ratingValue =
+                      algo.gpt_attempts_total > 0 &&
+                      algo.gpt_average_rating !== null
+                        ? algo.gpt_average_rating.toFixed(1)
+                        : "-";
+                    const ratingLabel =
+                      ratingValue === "-" ? "-" : `★ ${ratingValue}`;
+                    return (
+                      <li key={algo.algorithm_id}>
+                        <div className="list-title">{algo.algorithm_title}</div>
+                        <div className="list-meta">
+                          Повторений {algo.completed_reviews}/
+                          {algo.total_reviews} · GPT: {ratingLabel} · попыток{" "}
+                          {algo.gpt_attempts_total}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {!focusMode && (
+        <section className="panel">
+          <div className="panel-header">
           <div>
             <h2>Статистика повторений</h2>
             <p className="muted">
@@ -781,6 +1164,299 @@ const Reviews = () => {
                   disabled={promptLoading || !buildCheckPrompt()}
                 >
                   {copied ? "Скопировано" : "Копировать"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {algorithmDetail && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h2>{algorithmDetail.title || "Алгоритм"}</h2>
+                <p className="muted">
+                  Группа {algorithmDetail.group_title || "-"} · Интервал{" "}
+                  {algorithmDetail.interval_days} дней · Дата:{" "}
+                  {formatDueDate(algorithmDetail.due_date)}
+                </p>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={closeAlgorithmReview}
+              >
+                Закрыть
+              </button>
+            </div>
+            <div className="modal-body">
+              {algorithmActionError && (
+                <div className="alert error">{algorithmActionError}</div>
+              )}
+              {algorithmSuccessMessage && (
+                <div className="alert success">{algorithmSuccessMessage}</div>
+              )}
+              <div className="summary-grid">
+                <div className="summary-card">
+                  <div className="summary-title">Кратко</div>
+                  <div className="summary-text">
+                    {algorithmDetail.summary || "Сводка не найдена."}
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="summary-title">Когда применять</div>
+                  <div className="summary-text">
+                    {algorithmDetail.when_to_use || "-"}
+                  </div>
+                </div>
+                <div className="summary-card">
+                  <div className="summary-title">Сложность</div>
+                  <div className="summary-text">
+                    {algorithmDetail.complexity || "-"}
+                  </div>
+                </div>
+              </div>
+              <div className="summary-grid">
+                <div className="summary-card">
+                  <div className="summary-title">Инварианты</div>
+                  {algorithmDetail.invariants?.length ? (
+                    <ul className="summary-list">
+                      {algorithmDetail.invariants.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="summary-text">Нет.</div>
+                  )}
+                </div>
+                <div className="summary-card">
+                  <div className="summary-title">Шаги</div>
+                  {algorithmDetail.steps?.length ? (
+                    <ul className="summary-list">
+                      {algorithmDetail.steps.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="summary-text">Нет.</div>
+                  )}
+                </div>
+                <div className="summary-card">
+                  <div className="summary-title">Пограничные случаи</div>
+                  {algorithmDetail.corner_cases?.length ? (
+                    <ul className="summary-list">
+                      {algorithmDetail.corner_cases.map((item, index) => (
+                        <li key={`${item}-${index}`}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="summary-text">Нет.</div>
+                  )}
+                </div>
+              </div>
+              <div className="questions-block">
+                <div className="questions-title">Вопросы</div>
+                {algorithmQuestions.length === 0 && (
+                  <div className="empty-state">Вопросы отсутствуют.</div>
+                )}
+                {algorithmQuestions.map((question, index) => (
+                  <div key={`${question}-${index}`} className="question-card">
+                    <div className="question-text">{question}</div>
+                    <textarea
+                      rows="3"
+                      value={algorithmAnswers[index] || ""}
+                      onChange={(event) =>
+                        handleAlgorithmAnswerChange(index, event.target.value)
+                      }
+                      placeholder="Ваш ответ"
+                    />
+                  </div>
+                ))}
+              </div>
+              <div className="form-actions">
+                <button
+                  className="ghost-button"
+                  type="button"
+                  onClick={openAlgorithmCheckPrompt}
+                  disabled={!algorithmQuestions.length}
+                >
+                  Сгенерировать промпт проверки
+                </button>
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={handleAlgorithmComplete}
+                >
+                  Завершить повторение
+                </button>
+              </div>
+              {algorithmGptFeedback && algorithmOverall && (
+                <div className="summary-card">
+                  <div className="panel-header">
+                    <div>
+                      <div className="summary-title">Оценка GPT</div>
+                      <p className="muted">
+                        Итоговая оценка и ключевые замечания по ответам.
+                      </p>
+                    </div>
+                    <button
+                      className="ghost-button"
+                      type="button"
+                      onClick={() =>
+                        setAlgorithmShowGptFeedback((prev) => !prev)
+                      }
+                    >
+                      {algorithmShowGptFeedback ? "Скрыть" : "Показать"}
+                    </button>
+                  </div>
+                  <div className="summary-text">
+                    Оценка: {algorithmOverall.rating_1_to_5}/5 ·{" "}
+                    {algorithmOverall.score_0_to_100} ·{" "}
+                    {algorithmOverall.verdict}
+                  </div>
+                  {algorithmShowGptFeedback && (
+                    <>
+                      <div className="notes-grid">
+                        <div>
+                          <div className="summary-title">Ключевые пробелы</div>
+                          {algorithmOverall.key_gaps.length > 0 ? (
+                            <ul className="summary-list">
+                              {algorithmOverall.key_gaps.map((item, index) => (
+                                <li key={`${item}-${index}`}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="summary-text">Нет.</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="summary-title">Следующие шаги</div>
+                          {algorithmOverall.next_steps.length > 0 ? (
+                            <ul className="summary-list">
+                              {algorithmOverall.next_steps.map((item, index) => (
+                                <li key={`${item}-${index}`}>{item}</li>
+                              ))}
+                            </ul>
+                          ) : (
+                            <div className="summary-text">Нет.</div>
+                          )}
+                        </div>
+                        <div>
+                          <div className="summary-title">Ограничения</div>
+                          {algorithmOverall.limitations.length > 0 ? (
+                            <ul className="summary-list">
+                              {algorithmOverall.limitations.map(
+                                (item, index) => (
+                                  <li key={`${item}-${index}`}>{item}</li>
+                                )
+                              )}
+                            </ul>
+                          ) : (
+                            <div className="summary-text">Нет.</div>
+                          )}
+                        </div>
+                      </div>
+                      {algorithmGptItems.length > 0 && (
+                        <div className="questions-block">
+                          <div className="questions-title">
+                            Оценка по вопросам
+                          </div>
+                          {algorithmGptItems.map((item, index) => (
+                            <div
+                              key={`${item.question}-${index}`}
+                              className="question-card"
+                            >
+                              <div className="question-text">
+                                {item.question}
+                              </div>
+                              <div className="summary-text">
+                                Оценка: {item.rating_1_to_5}/5 ·{" "}
+                                {item.is_answered ? "Ответ дан" : "Нет ответа"}
+                              </div>
+                              <div className="summary-text">
+                                Ответ: {item.user_answer || "-"}
+                              </div>
+                              <div className="summary-text">
+                                Фидбек: {item.short_feedback || "-"}
+                              </div>
+                              <div className="summary-text">
+                                Эталон: {item.correct_answer || "-"}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )}
+              <div className="feedback-block">
+                <div className="feedback-title">
+                  Фидбек от GPT (JSON, опционально)
+                </div>
+                <textarea
+                  rows="4"
+                  value={algorithmFeedback}
+                  onChange={(event) =>
+                    setAlgorithmFeedback(event.target.value)
+                  }
+                  placeholder="Вставьте JSON результата проверки"
+                />
+                <div className="form-actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={handleAlgorithmSaveFeedback}
+                    disabled={algorithmFeedbackSaving}
+                  >
+                    {algorithmFeedbackSaving ? "Сохранение..." : "Сохранить фидбек"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {algorithmShowPrompt && algorithmDetail && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <div className="modal-header">
+              <div>
+                <h2>Промпт для проверки алгоритма</h2>
+                <p className="muted">Скопируйте текст и вставьте в GPT.</p>
+              </div>
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={() => setAlgorithmShowPrompt(false)}
+              >
+                Закрыть
+              </button>
+            </div>
+            <div className="modal-body">
+              {algorithmPromptLoading ? (
+                <p className="muted">Подготовка промпта...</p>
+              ) : (
+                <textarea
+                  className="prompt-area"
+                  rows="10"
+                  value={buildAlgorithmCheckPrompt()}
+                  readOnly
+                />
+              )}
+              <div className="modal-actions">
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={handleCopyAlgorithmPrompt}
+                  disabled={
+                    algorithmPromptLoading || !buildAlgorithmCheckPrompt()
+                  }
+                >
+                  {algorithmCopied ? "Скопировано" : "Копировать"}
                 </button>
               </div>
             </div>

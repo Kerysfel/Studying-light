@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 from studying_light.api.v1.structures import (
     AlgorithmGroupPayload,
     AlgorithmImportItem,
+    AlgorithmGptReviewResult,
     GptQuestionsByInterval,
     GptReviewResult,
     RawNotes,
@@ -268,6 +269,28 @@ class ReviewAttemptOut(BaseModel):
     gpt_verdict: str | None = None
 
 
+class AlgorithmReviewCompletePayload(BaseModel):
+    """Algorithm review completion payload."""
+
+    answers: dict
+
+
+class AlgorithmReviewFeedbackPayload(BaseModel):
+    """Algorithm review feedback payload."""
+
+    gpt_check_result: AlgorithmGptReviewResult
+
+
+class AlgorithmReviewAttemptOut(BaseModel):
+    """Algorithm review attempt response."""
+
+    id: int
+    review_item_id: int
+    created_at: datetime
+    gpt_check_json: dict | None = None
+    rating_1_to_5: int | None = None
+
+
 class ImportGptResponse(BaseModel):
     """GPT import response."""
 
@@ -314,6 +337,27 @@ class AlgorithmReviewItemOut(BaseModel):
     title: str
 
 
+class AlgorithmReviewDetailOut(BaseModel):
+    """Algorithm review detail response."""
+
+    id: int
+    algorithm_id: int
+    interval_days: int
+    due_date: date
+    status: str
+    group_id: int
+    group_title: str
+    title: str
+    summary: str
+    when_to_use: str
+    complexity: str
+    invariants: list[str]
+    steps: list[str]
+    corner_cases: list[str]
+    questions: list[str]
+    gpt_feedback: AlgorithmGptReviewResult | None = None
+
+
 class TodayResponse(BaseModel):
     """Dashboard response for today."""
 
@@ -321,6 +365,19 @@ class TodayResponse(BaseModel):
     review_items: list[ReviewItemOut]
     algorithm_review_items: list[AlgorithmReviewItemOut]
     review_progress: ReviewProgressOut
+
+
+class AlgorithmReviewStatsOut(BaseModel):
+    """Algorithm review statistics."""
+
+    group_id: int
+    group_title: str
+    algorithm_id: int
+    algorithm_title: str
+    total_reviews: int
+    completed_reviews: int
+    gpt_attempts_total: int
+    gpt_average_rating: float | None = None
 
 
 class SettingsOut(BaseModel):

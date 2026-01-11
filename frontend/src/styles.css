@@ -366,6 +366,11 @@
   font-size: 12px;
 }
 
+.badge.blue {
+  background: rgba(63, 112, 255, 0.16);
+  color: var(--color-slate);
+}
+
 .card-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -749,6 +754,11 @@ select {
 .review-list-item.active {
   border-color: rgba(216, 120, 58, 0.35);
   box-shadow: 0 12px 22px rgba(216, 120, 58, 0.12);
+}
+
+.algorithm-list-item {
+  border-color: rgba(63, 112, 255, 0.22);
+  background: rgba(63, 112, 255, 0.08);
 }
 
 .review-detail {

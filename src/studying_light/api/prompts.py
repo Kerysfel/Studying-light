@@ -11,6 +11,7 @@ ALLOWED_PROMPTS: set[str] = {
     "generate_summary_and_questions",
     "check_answers",
     "generate_algorithms_from_code",
+    "check_algorithm_answers",
 }
 
 
