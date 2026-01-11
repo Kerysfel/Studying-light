@@ -941,6 +941,27 @@ select {
   border: 1px solid var(--color-border-soft);
 }
 
+.algorithm-card {
+  display: grid;
+  gap: 12px;
+}
+
+.algorithm-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.algorithm-meta {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+
+.group-form {
+  margin-top: 8px;
+}
+
 .summary-title {
   text-transform: uppercase;
   letter-spacing: 0.18em;

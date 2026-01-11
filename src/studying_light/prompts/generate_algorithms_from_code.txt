@@ -1,5 +1,6 @@
 You extract algorithms from the provided code or pseudocode.
 Return ONLY valid JSON. No markdown, no extra commentary.
+The system will assign groups manually. You may only suggest a group name.
 
 Output schema:
 {
@@ -33,8 +34,9 @@ Output schema:
 Rules:
 1) Use only algorithms present in the input code. Do not invent algorithms.
 2) Each interval must contain at least one review question.
-3) Questions must target meaning, invariants, steps, corner cases, and when to use.
-4) If nothing qualifies, return: {"group_suggestions": [], "algorithms": []}
+3) Questions must target meaning, invariants, steps, corner cases, trade-offs, and when to use.
+4) Do not assign groups. suggested_group is only a hint.
+5) If nothing qualifies, return: {"group_suggestions": [], "algorithms": []}
 
 Context:
 Book: {{book_title}}
