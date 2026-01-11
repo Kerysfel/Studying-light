@@ -119,6 +119,8 @@ const ReadingSession = () => {
   const [terms, setTerms] = useState("");
   const [sentences, setSentences] = useState("");
   const [freeform, setFreeform] = useState("");
+  const [codeText, setCodeText] = useState("");
+  const [codeLanguage, setCodeLanguage] = useState("pseudo");
   const [pageEnd, setPageEnd] = useState("");
   const [activeTab, setActiveTab] = useState("keywords");
   const [saving, setSaving] = useState(false);
@@ -126,9 +128,10 @@ const ReadingSession = () => {
   const [createdPart, setCreatedPart] = useState(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [showPromptModal, setShowPromptModal] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copiedPrompt, setCopiedPrompt] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptText, setPromptText] = useState("");
+  const [algorithmPromptText, setAlgorithmPromptText] = useState("");
   const [promptPartIndex, setPromptPartIndex] = useState(null);
 
   const [pomodoroRunning, setPomodoroRunning] = useState(false);
@@ -144,6 +147,7 @@ const ReadingSession = () => {
   const termsRef = useRef(null);
   const sentencesRef = useRef(null);
   const freeformRef = useRef(null);
+  const codeRef = useRef(null);
   const elapsedMsRef = useRef(0);
   const lastTickRef = useRef(null);
   const sessionStartedRef = useRef(false);
@@ -312,6 +316,7 @@ const ReadingSession = () => {
       terms: termsRef,
       sentences: sentencesRef,
       freeform: freeformRef,
+      code: codeRef,
     };
     const ref = refMap[activeTab];
     if (ref?.current) {
@@ -345,6 +350,7 @@ const ReadingSession = () => {
     { key: "terms", label: "Термины" },
     { key: "sentences", label: "Важные предложения" },
     { key: "freeform", label: "Свободные заметки" },
+    { key: "code", label: "Код" },
   ];
 
   const filledTabs = {
@@ -352,6 +358,7 @@ const ReadingSession = () => {
     terms: terms.trim().length > 0,
     sentences: sentences.trim().length > 0,
     freeform: freeform.trim().length > 0,
+    code: codeText.trim().length > 0,
   };
 
   const togglePomodoro = () => {
@@ -408,7 +415,7 @@ const ReadingSession = () => {
     return completed || 1;
   }, [planSegments, segmentIndex]);
 
-  const buildPrompt = () => {
+  const buildSummaryPrompt = () => {
     if (!promptText) {
       return "";
     }
@@ -437,18 +444,37 @@ const ReadingSession = () => {
     return rendered;
   };
 
-  const handleCopyPrompt = async (text) => {
+  const buildAlgorithmPrompt = () => {
+    if (!algorithmPromptText) {
+      return "";
+    }
+    const trimmedCode = codeText.trim();
+    const replacements = {
+      book_title: selectedBookTitle || "-",
+      part_index: promptPartIndex ? String(promptPartIndex) : "-",
+      part_label: label.trim() || "-",
+      code_language: codeLanguage || "-",
+      code_text: trimmedCode ? codeText : "-",
+    };
+    let rendered = algorithmPromptText;
+    Object.entries(replacements).forEach(([key, value]) => {
+      rendered = rendered.replaceAll(`{{${key}}}`, value);
+    });
+    return rendered;
+  };
+
+  const handleCopyPrompt = async (text, key) => {
     try {
       await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1600);
+      setCopiedPrompt(key);
+      setTimeout(() => setCopiedPrompt(""), 1600);
     } catch (err) {
       setError("Не удалось скопировать текст.");
     }
   };
 
   const openPromptModal = async () => {
-    setCopied(false);
+    setCopiedPrompt("");
     setError("");
     if (!selectedBook) {
       setError("Выберите книгу для сессии.");
@@ -456,16 +482,29 @@ const ReadingSession = () => {
     }
     try {
       setPromptLoading(true);
-      const [template, parts] = await Promise.all([
-        requestText("/prompts/generate_summary_and_questions"),
-        request(`/parts?book_id=${selectedBook}`),
-      ]);
+      const hasCode = codeText.trim().length > 0;
+      let template = "";
+      let algorithmTemplate = "";
+      let parts = [];
+      if (hasCode) {
+        [template, parts, algorithmTemplate] = await Promise.all([
+          requestText("/prompts/generate_summary_and_questions"),
+          request(`/parts?book_id=${selectedBook}`),
+          requestText("/prompts/generate_algorithms_from_code"),
+        ]);
+      } else {
+        [template, parts] = await Promise.all([
+          requestText("/prompts/generate_summary_and_questions"),
+          request(`/parts?book_id=${selectedBook}`),
+        ]);
+      }
       const maxIndex = parts.reduce(
         (maxValue, item) => Math.max(maxValue, item.part_index),
         0
       );
       setPromptPartIndex(maxIndex + 1);
       setPromptText(template);
+      setAlgorithmPromptText(algorithmTemplate);
       setShowPromptModal(true);
     } catch (err) {
       setError(getErrorMessage(err));
@@ -537,6 +576,8 @@ const ReadingSession = () => {
     setTerms("");
     setSentences("");
     setFreeform("");
+    setCodeText("");
+    setCodeLanguage("pseudo");
     setPageEnd("");
     setCreatedPart(null);
     setSessionSeconds(0);
@@ -545,6 +586,23 @@ const ReadingSession = () => {
     setShowLastPageNotice(false);
     resetPomodoro();
     setShowSaveModal(false);
+  };
+
+  const handleCodeKeyDown = (event) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+    event.preventDefault();
+    const target = event.currentTarget;
+    const start = target.selectionStart ?? 0;
+    const end = target.selectionEnd ?? 0;
+    const value = target.value;
+    const updated = `${value.slice(0, start)}    ${value.slice(end)}`;
+    setCodeText(updated);
+    requestAnimationFrame(() => {
+      target.selectionStart = start + 4;
+      target.selectionEnd = start + 4;
+    });
   };
 
   return (
@@ -712,6 +770,32 @@ const ReadingSession = () => {
               />
             </div>
           )}
+          {activeTab === "code" && (
+            <div className="form-block full">
+              <label>Язык кода</label>
+              <select
+                value={codeLanguage}
+                onChange={(event) => setCodeLanguage(event.target.value)}
+              >
+                <option value="pseudo">pseudo</option>
+                <option value="python">python</option>
+                <option value="cpp">cpp</option>
+                <option value="java">java</option>
+                <option value="javascript">javascript</option>
+                <option value="go">go</option>
+              </select>
+              <label>Код / псевдокод</label>
+              <textarea
+                className="code-area"
+                rows="10"
+                ref={codeRef}
+                value={codeText}
+                onChange={(event) => setCodeText(event.target.value)}
+                onKeyDown={handleCodeKeyDown}
+                placeholder="Вставьте или напишите код здесь"
+              />
+            </div>
+          )}
         </div>
 
         <div className="form-actions">
@@ -815,25 +899,68 @@ const ReadingSession = () => {
             </div>
             <div className="modal-body">
               {promptLoading ? (
-                <p className="muted">Подготовка промпта...</p>
+                <p className="muted">Загрузка промптов...</p>
               ) : (
-                <textarea
-                  className="prompt-area"
-                  rows="10"
-                  value={buildPrompt()}
-                  readOnly
-                />
+                <div className="prompt-grid">
+                  <div className="prompt-block">
+                    <div className="prompt-header">
+                      <div className="prompt-title">
+                        {codeText.trim()
+                          ? "Промпт для повторений части (теория)"
+                          : "Промпт для повторений части"}
+                      </div>
+                      <button
+                        className="ghost-button"
+                        type="button"
+                        onClick={() =>
+                          handleCopyPrompt(buildSummaryPrompt(), "summary")
+                        }
+                        disabled={promptLoading || !buildSummaryPrompt()}
+                      >
+                        {copiedPrompt === "summary"
+                          ? "Скопировано"
+                          : "Скопировать"}
+                      </button>
+                    </div>
+                    <textarea
+                      className="prompt-area"
+                      rows="10"
+                      value={buildSummaryPrompt()}
+                      readOnly
+                    />
+                  </div>
+                  {codeText.trim() && (
+                    <div className="prompt-block">
+                      <div className="prompt-header">
+                        <div className="prompt-title">
+                          Промпт для алгоритмов (из кода/псевдокода)
+                        </div>
+                        <button
+                          className="ghost-button"
+                          type="button"
+                          onClick={() =>
+                            handleCopyPrompt(
+                              buildAlgorithmPrompt(),
+                              "algorithm"
+                            )
+                          }
+                          disabled={promptLoading || !buildAlgorithmPrompt()}
+                        >
+                          {copiedPrompt === "algorithm"
+                            ? "Скопировано"
+                            : "Скопировать"}
+                        </button>
+                      </div>
+                      <textarea
+                        className="prompt-area"
+                        rows="10"
+                        value={buildAlgorithmPrompt()}
+                        readOnly
+                      />
+                    </div>
+                  )}
+                </div>
               )}
-              <div className="modal-actions">
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => handleCopyPrompt(buildPrompt())}
-                  disabled={promptLoading || !buildPrompt()}
-                >
-                  {copied ? "Скопировано" : "Копировать"}
-                </button>
-              </div>
             </div>
           </div>
         </div>

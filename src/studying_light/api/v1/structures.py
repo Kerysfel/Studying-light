@@ -2,7 +2,7 @@
 
 from datetime import date
 
-from pydantic import BaseModel, Field, RootModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
 
 
 class TermItem(BaseModel):
@@ -23,6 +23,67 @@ class RawNotes(BaseModel):
 
 class GptQuestionsByInterval(RootModel[dict[int, list[str]]]):
     """Questions grouped by interval days."""
+
+
+class AlgorithmReviewQuestionsByInterval(RootModel[dict[int, list[str]]]):
+    """Algorithm review questions grouped by interval days."""
+
+
+class AlgorithmCodePayload(BaseModel):
+    """Algorithm code payload."""
+
+    code_kind: str
+    language: str
+    code_text: str
+
+    @field_validator("code_kind", "language", "code_text")
+    @classmethod
+    def validate_non_empty(cls, value: str) -> str:
+        """Ensure string fields are not empty."""
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
+
+
+class AlgorithmGroupPayload(BaseModel):
+    """Algorithm group payload."""
+
+    title: str
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """Ensure group title is not empty."""
+        if not value.strip():
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmImportItem(BaseModel):
+    """Algorithm import payload item."""
+
+    title: str
+    summary: str
+    when_to_use: str
+    complexity: str
+    invariants: list[str]
+    steps: list[str]
+    corner_cases: list[str]
+    review_questions_by_interval: AlgorithmReviewQuestionsByInterval
+    code: AlgorithmCodePayload
+    suggested_group: str | None = None
+    group_title: str | None = None
+    source_part_id: int | None = None
+
+    @field_validator("title", "summary", "when_to_use", "complexity")
+    @classmethod
+    def validate_required_strings(cls, value: str) -> str:
+        """Ensure required strings are not empty."""
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
 
 
 class GptReviewMeta(BaseModel):
@@ -100,6 +161,87 @@ class GptReviewResult(BaseModel):
     @field_validator("items")
     @classmethod
     def validate_items(cls, value: list[GptReviewItem]) -> list[GptReviewItem]:
+        """Ensure at least one item is provided."""
+        if not value:
+            raise ValueError("items cannot be empty")
+        return value
+
+
+class AlgorithmGptReviewMeta(BaseModel):
+    """Metadata for algorithm GPT checks."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    group_title: str
+    algorithm_title: str
+    interval_days: int | None = None
+    review_date: date
+
+    @field_validator("group_title", "algorithm_title")
+    @classmethod
+    def validate_required(cls, value: str) -> str:
+        """Ensure required strings are not empty."""
+        if not value.strip():
+            raise ValueError("value cannot be empty")
+        return value
+
+
+class AlgorithmGptReviewOverall(BaseModel):
+    """Overall GPT evaluation for algorithm review."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    rating_1_to_5: int
+    key_gaps: list[str] = Field(default_factory=list)
+    next_steps: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+
+    @field_validator("rating_1_to_5")
+    @classmethod
+    def validate_rating(cls, value: int) -> int:
+        """Ensure rating is between 1 and 5."""
+        if value < 1 or value > 5:
+            raise ValueError("rating_1_to_5 must be between 1 and 5")
+        return value
+
+
+class AlgorithmGptReviewItem(BaseModel):
+    """Per-question GPT evaluation for algorithm review."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    question: str
+    user_answer: str
+    rating_1_to_5: int
+    is_answered: bool
+    short_feedback: str
+    correct_answer: str
+    mistakes: list[str] = Field(default_factory=list)
+
+    @field_validator("rating_1_to_5")
+    @classmethod
+    def validate_rating(cls, value: int) -> int:
+        """Ensure rating is between 1 and 5."""
+        if value < 1 or value > 5:
+            raise ValueError("rating_1_to_5 must be between 1 and 5")
+        return value
+
+
+class AlgorithmGptReviewResult(BaseModel):
+    """GPT payload for algorithm reviews."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    meta: AlgorithmGptReviewMeta
+    overall: AlgorithmGptReviewOverall
+    items: list[AlgorithmGptReviewItem]
+
+    @field_validator("items")
+    @classmethod
+    def validate_items(
+        cls,
+        value: list[AlgorithmGptReviewItem],
+    ) -> list[AlgorithmGptReviewItem]:
         """Ensure at least one item is provided."""
         if not value:
             raise ValueError("items cannot be empty")
