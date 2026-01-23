@@ -1,21 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
-
-const formatDueDate = (value) => {
-  if (!value) {
-    return "-";
-  }
-  const todayKey = new Date().toISOString().slice(0, 10);
-  if (value === todayKey) {
-    return "Сегодня";
-  }
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) {
-    return value;
-  }
-  return parsed.toLocaleDateString();
-};
+import { formatDueDate } from "../date.js";
 
 const Reviews = () => {
   const [items, setItems] = useState([]);
@@ -686,7 +672,7 @@ const Reviews = () => {
                 <div className="list-title">{item.book_title}</div>
                 <div className="list-meta">
                   Часть {item.part_index} · Интервал {item.interval_days} дней ·{" "}
-                  Дата: {formatDueDate(item.due_date)}
+                  Дата: {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
                 </div>
               </div>
               <button
@@ -983,7 +969,8 @@ const Reviews = () => {
                   <div className="list-title">{item.title}</div>
                   <div className="list-meta">
                     Группа {item.group_title} · Интервал {item.interval_days}{" "}
-                    дней · Дата: {formatDueDate(item.due_date)}
+                    дней · Дата:{" "}
+                    {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
                   </div>
                 </div>
                 <button
@@ -1180,7 +1167,7 @@ const Reviews = () => {
                 <p className="muted">
                   Группа {algorithmDetail.group_title || "-"} · Интервал{" "}
                   {algorithmDetail.interval_days} дней · Дата:{" "}
-                  {formatDueDate(algorithmDetail.due_date)}
+                  {formatDueDate(algorithmDetail.due_date, { todayLabel: "Сегодня" })}
                 </p>
               </div>
               <button
@@ -1495,7 +1482,10 @@ const Reviews = () => {
                       <div className="list-title">
                         Интервал {item.interval_days} дн
                       </div>
-                      <div className="list-meta">Текущая дата: {item.due_date}</div>
+                      <div className="list-meta">
+                        Текущая дата:{" "}
+                        {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
+                      </div>
                     </div>
                     <div className="schedule-actions">
                       <input

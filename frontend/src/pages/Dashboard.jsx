@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { getErrorMessage, request } from "../api.js";
+import { formatDueDate } from "../date.js";
 
 const Dashboard = () => {
   const [today, setToday] = useState(null);
@@ -71,6 +72,23 @@ const Dashboard = () => {
   ];
   const activeReviewItems =
     reviewsTab === "overdue" ? overdueReviewItems : reviewItems;
+  const oldestOverdueDate = overdueReviewItems.reduce((oldest, item) => {
+    if (!item?.due_date) {
+      return oldest;
+    }
+    if (!oldest || item.due_date < oldest) {
+      return item.due_date;
+    }
+    return oldest;
+  }, null);
+  const overdueMeta = overdueCount
+    ? `Просрочено: ${overdueCount} · с ${formatDueDate(oldestOverdueDate, {
+        todayLabel: "Сегодня",
+      })}`
+    : "Просроченных повторений нет";
+  const overdueDetail = overdueCount
+    ? "Начните с самых старых повторений."
+    : "План без долгов, держим темп.";
   const summaryReviewItems = reviewItems.length
     ? reviewItems
     : overdueReviewItems;
@@ -178,9 +196,9 @@ const Dashboard = () => {
               detail: "Короткие интервалы даются легче всего.",
             },
             {
-              title: "Фокус",
-              meta: "Один контекст",
-              detail: "Короткие заметки и ясные выводы.",
+              title: "Просрочки",
+              meta: overdueMeta,
+              detail: overdueDetail,
             },
           ].map((item, index) => (
             <div
@@ -242,7 +260,8 @@ const Dashboard = () => {
                     <div className="list-title">{item.book_title}</div>
                     <div className="list-meta">
                       Часть {item.part_index} · Интервал {item.interval_days} дней
-                      · {duePrefix} {item.due_date}
+                      · {duePrefix}{" "}
+                      {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
                     </div>
                   </div>
                   <Link className="primary-button" to="/reviews">
