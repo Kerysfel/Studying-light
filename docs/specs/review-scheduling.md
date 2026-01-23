@@ -17,8 +17,8 @@
      (ключ может быть `int` или `str`).
 
 ## Поведение в API
-- `GET /api/v1/today` возвращает только элементы с `due_date == today`.
-- `GET /api/v1/reviews/today` возвращает элементы с `due_date >= today`.
+- `GET /api/v1/today` возвращает элементы с `due_date == today` и список просроченных повторений в `overdue_review_items`.
+- `GET /api/v1/reviews/today` возвращает все запланированные повторения, включая просроченные.
 - `PATCH /api/v1/reviews/{review_id}` переносит дату только для `status=planned`.
 - `POST /api/v1/reviews/{review_id}/complete` помечает `status=done`
   и создает `ReviewAttempt` с ответами.

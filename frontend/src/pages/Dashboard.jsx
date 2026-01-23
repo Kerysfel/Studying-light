@@ -10,6 +10,7 @@ const Dashboard = () => {
   const [showSummary, setShowSummary] = useState(
     () => sessionStorage.getItem("summaryDismissed") !== "true"
   );
+  const [reviewsTab, setReviewsTab] = useState("today");
 
   const load = useCallback(async () => {
     try {
@@ -45,10 +46,41 @@ const Dashboard = () => {
 
   const activeBooks = today?.active_books || [];
   const reviewItems = today?.review_items || [];
+  const overdueReviewItems = today?.overdue_review_items || [];
   const reviewProgress = today?.review_progress || { total: 0, completed: 0 };
   const reviewPercent = reviewProgress.total
     ? Math.min((reviewProgress.completed / reviewProgress.total) * 100, 100)
     : 0;
+  const overdueCount = overdueReviewItems.length;
+  const reviewBadgeLabel = overdueCount
+    ? `${reviewItems.length} на сегодня · ${overdueCount} просрочено`
+    : `${reviewItems.length} повторений`;
+  const reviewSummaryLabel = overdueCount
+    ? `Сегодня: ${reviewItems.length} · Просрочено: ${overdueCount}`
+    : `Сегодня: ${reviewItems.length}`;
+  const reviewTabItems = [
+    {
+      key: "today",
+      label: `Сегодня (${reviewItems.length})`,
+    },
+    {
+      key: "overdue",
+      label: `Просроченные (${overdueCount})`,
+      filled: overdueCount > 0,
+    },
+  ];
+  const activeReviewItems =
+    reviewsTab === "overdue" ? overdueReviewItems : reviewItems;
+  const summaryReviewItems = reviewItems.length
+    ? reviewItems
+    : overdueReviewItems;
+  const summaryReviewEmpty =
+    reviewItems.length === 0 && overdueReviewItems.length === 0;
+  const emptyReviewLabel =
+    reviewsTab === "overdue"
+      ? "Просроченных повторений нет."
+      : "На сегодня повторений нет.";
+  const duePrefix = reviewsTab === "overdue" ? "Просрочено" : "До";
 
   const dismissSummary = () => {
     setShowSummary(false);
@@ -95,18 +127,25 @@ const Dashboard = () => {
                 <div className="summary-block">
                   <div className="summary-title">Повторения</div>
                   <div className="summary-value">
-                    Запланировано: {reviewItems.length}
+                    {reviewSummaryLabel}
                   </div>
-                  {reviewItems.length === 0 ? (
+                  {summaryReviewEmpty ? (
                     <div className="summary-muted">Повторений нет.</div>
                   ) : (
-                    <ul className="summary-list">
-                      {reviewItems.slice(0, 3).map((item) => (
-                        <li key={item.id}>
-                          {item.book_title} · Часть {item.part_index}
-                        </li>
-                      ))}
-                    </ul>
+                    <>
+                      {reviewItems.length === 0 && overdueReviewItems.length > 0 && (
+                        <div className="summary-muted">
+                          Есть просроченные повторения.
+                        </div>
+                      )}
+                      <ul className="summary-list">
+                        {summaryReviewItems.slice(0, 3).map((item) => (
+                          <li key={item.id}>
+                            {item.book_title} · Часть {item.part_index}
+                          </li>
+                        ))}
+                      </ul>
+                    </>
                   )}
                 </div>
               </div>
@@ -123,7 +162,7 @@ const Dashboard = () => {
               Держите план компактным. Сначала закрывайте главное.
             </p>
           </div>
-          <span className="badge">{reviewItems.length} повторений</span>
+          <span className="badge">{reviewBadgeLabel}</span>
         </div>
         {error && <div className="alert error">{error}</div>}
         <div className="card-grid">
@@ -135,7 +174,7 @@ const Dashboard = () => {
             },
             {
               title: "Повторения",
-              meta: `Запланировано: ${reviewItems.length}`,
+              meta: reviewSummaryLabel,
               detail: "Короткие интервалы даются легче всего.",
             },
             {
@@ -176,25 +215,43 @@ const Dashboard = () => {
             Все повторения
           </Link>
         </div>
-        {loading && <p className="muted">Загрузка повторений...</p>}
-        {!loading && reviewItems.length === 0 && (
-          <div className="empty-state">На сегодня повторений нет.</div>
-        )}
-        <div className="list">
-          {reviewItems.map((item) => (
-            <div key={item.id} className="list-row">
-              <div>
-                <div className="list-title">{item.book_title}</div>
-                <div className="list-meta">
-                  Часть {item.part_index} · Интервал {item.interval_days} дней ·
-                  До {item.due_date}
-                </div>
-              </div>
-              <Link className="primary-button" to="/reviews">
-                Начать повторение
-              </Link>
-            </div>
+        <div className="tabs">
+          {reviewTabItems.map((tab) => (
+            <button
+              key={tab.key}
+              className={`tab-button${reviewsTab === tab.key ? " active" : ""}${
+                tab.filled ? " filled" : ""
+              }`}
+              type="button"
+              onClick={() => setReviewsTab(tab.key)}
+            >
+              {tab.label}
+            </button>
           ))}
+        </div>
+        <div className="tab-panel">
+          {loading && <p className="muted">Загрузка повторений...</p>}
+          {!loading && activeReviewItems.length === 0 && (
+            <div className="empty-state">{emptyReviewLabel}</div>
+          )}
+          {!loading && activeReviewItems.length > 0 && (
+            <div className="list">
+              {activeReviewItems.map((item) => (
+                <div key={item.id} className="list-row">
+                  <div>
+                    <div className="list-title">{item.book_title}</div>
+                    <div className="list-meta">
+                      Часть {item.part_index} · Интервал {item.interval_days} дней
+                      · {duePrefix} {item.due_date}
+                    </div>
+                  </div>
+                  <Link className="primary-button" to="/reviews">
+                    Начать повторение
+                  </Link>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </section>
 

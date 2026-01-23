@@ -363,6 +363,7 @@ class TodayResponse(BaseModel):
 
     active_books: list[BookProgressOut]
     review_items: list[ReviewItemOut]
+    overdue_review_items: list[ReviewItemOut]
     algorithm_review_items: list[AlgorithmReviewItemOut]
     review_progress: ReviewProgressOut
 

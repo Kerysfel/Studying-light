@@ -84,9 +84,19 @@ def test_part_import_creates_reviews_and_today(
     assert questions_by_interval[1] == ["Q1"]
     assert questions_by_interval[7] == ["Q2"]
 
+    overdue_item = next(
+        item for item in stored_items if item.interval_days == 7
+    )
+    overdue_item.due_date = date.today() - timedelta(days=1)
+    session.commit()
+
     today_response = client.get("/api/v1/today")
     assert today_response.status_code == 200
     today_items = today_response.json()["review_items"]
     assert len(today_items) == 1
     assert today_items[0]["interval_days"] == 1
     assert date.fromisoformat(today_items[0]["due_date"]) == date.today()
+    overdue_items = today_response.json()["overdue_review_items"]
+    assert len(overdue_items) == 1
+    assert overdue_items[0]["interval_days"] == 7
+    assert date.fromisoformat(overdue_items[0]["due_date"]) < date.today()
