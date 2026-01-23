@@ -64,6 +64,7 @@ def _build_algorithm_review_item_out(
 @router.get("/today")
 def today(session: Session = Depends(get_session)) -> TodayResponse:
     """Return today's reading plan and reviews."""
+    today_date = date.today()
     active_books = (
         session.execute(select(Book).where(Book.status == "active").order_by(Book.id))
         .scalars()
@@ -92,7 +93,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         .join(ReadingPart, ReviewScheduleItem.reading_part_id == ReadingPart.id)
         .join(Book, ReadingPart.book_id == Book.id)
         .where(
-            ReviewScheduleItem.due_date == date.today(),
+            ReviewScheduleItem.due_date == today_date,
             ReviewScheduleItem.status == "planned",
         )
         .order_by(ReviewScheduleItem.id)
@@ -102,12 +103,28 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         _build_review_item_out(item, part, book) for item, part, book in review_rows
     ]
 
+    overdue_rows = session.execute(
+        select(ReviewScheduleItem, ReadingPart, Book)
+        .join(ReadingPart, ReviewScheduleItem.reading_part_id == ReadingPart.id)
+        .join(Book, ReadingPart.book_id == Book.id)
+        .where(
+            ReviewScheduleItem.due_date < today_date,
+            ReviewScheduleItem.status == "planned",
+        )
+        .order_by(ReviewScheduleItem.due_date, ReviewScheduleItem.id)
+    ).all()
+
+    overdue_review_items = [
+        _build_review_item_out(item, part, book)
+        for item, part, book in overdue_rows
+    ]
+
     algorithm_review_rows = session.execute(
         select(AlgorithmReviewItem, Algorithm, AlgorithmGroup)
         .join(Algorithm, AlgorithmReviewItem.algorithm_id == Algorithm.id)
         .join(AlgorithmGroup, Algorithm.group_id == AlgorithmGroup.id)
         .where(
-            AlgorithmReviewItem.due_date == date.today(),
+            AlgorithmReviewItem.due_date == today_date,
             AlgorithmReviewItem.status == "planned",
         )
         .order_by(AlgorithmReviewItem.id)
@@ -138,6 +155,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
             for book in active_books
         ],
         review_items=review_items,
+        overdue_review_items=overdue_review_items,
         algorithm_review_items=algorithm_review_items,
         review_progress=ReviewProgressOut(
             total=int(review_total or 0),

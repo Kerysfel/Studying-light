@@ -66,15 +66,13 @@ def _build_review_item_out(
 
 @router.get("/reviews/today")
 def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut]:
-    """List planned review items scheduled for today or later."""
-    today = date.today()
+    """List planned review items, including overdue ones."""
     rows = session.execute(
         select(ReviewScheduleItem, ReadingPart, Book)
         .join(ReadingPart, ReviewScheduleItem.reading_part_id == ReadingPart.id)
         .join(Book, ReadingPart.book_id == Book.id)
         .where(
             ReviewScheduleItem.status == "planned",
-            ReviewScheduleItem.due_date >= today,
         )
         .order_by(ReviewScheduleItem.due_date, ReviewScheduleItem.id)
     ).all()
