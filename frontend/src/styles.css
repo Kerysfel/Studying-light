@@ -1005,6 +1005,9 @@ select {
   gap: 16px;
   overflow-x: auto;
   padding-bottom: 6px;
+  min-width: 0;
+  width: 100%;
+  max-width: 100%;
   scroll-snap-type: x mandatory;
 }
 
