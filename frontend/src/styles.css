@@ -781,6 +781,64 @@ select {
   line-height: var(--line-normal);
 }
 
+.markdown-content {
+  color: inherit;
+  line-height: var(--line-normal);
+}
+
+.markdown-content h2,
+.markdown-content h3 {
+  font-family: var(--font-display);
+  color: var(--color-slate);
+  margin: 8px 0;
+}
+
+.markdown-content h2 {
+  font-size: var(--text-lg);
+}
+
+.markdown-content h3 {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+
+.markdown-content p {
+  margin: 0 0 8px;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  margin: 8px 0;
+  padding-left: 20px;
+}
+
+.markdown-content li {
+  margin: 4px 0;
+}
+
+.markdown-content code {
+  font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono",
+    monospace;
+  background: var(--color-surface-ghost);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.85em;
+}
+
+.markdown-content pre {
+  background: var(--color-surface-ghost);
+  border: 1px solid var(--color-border-faint);
+  border-radius: 12px;
+  padding: 12px;
+  overflow: auto;
+}
+
+.markdown-content pre code {
+  background: transparent;
+  padding: 0;
+  display: block;
+}
+
 .notes-grid {
   display: grid;
   gap: 12px;

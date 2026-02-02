@@ -1,14 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request } from "../api.js";
-
-const summarize = (text) => {
-  if (!text) {
-    return "Краткое содержание недоступно.";
-  }
-  const words = text.trim().split(/\s+/).slice(0, 10);
-  return words.join(" ") + (words.length === 10 ? "..." : "");
-};
+import Markdown from "../components/Markdown.jsx";
 
 const formatDate = (value) => {
   if (!value) {
@@ -620,7 +613,9 @@ const ImportExport = () => {
                 <div className="card-meta">
                   Создано: {formatDate(selectedPart.created_at)}
                 </div>
-                <div className="card-detail">{summarize(selectedPart.gpt_summary)}</div>
+                <div className="card-detail">
+                  <Markdown content={selectedPart.gpt_summary} />
+                </div>
               </div>
             </div>
           )}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 import { formatDueDate } from "../date.js";
+import Markdown from "../components/Markdown.jsx";
 
 const Reviews = () => {
   const [items, setItems] = useState([]);
@@ -715,7 +716,11 @@ const Reviews = () => {
             <div className="summary-card">
               <div className="summary-title">Сводка</div>
               <div className="summary-text">
-                {detail.summary || "Сводка не найдена."}
+                {detail.summary ? (
+                  <Markdown content={detail.summary} />
+                ) : (
+                  "Сводка не найдена."
+                )}
               </div>
             </div>
 
@@ -1189,7 +1194,11 @@ const Reviews = () => {
                 <div className="summary-card">
                   <div className="summary-title">Кратко</div>
                   <div className="summary-text">
-                    {algorithmDetail.summary || "Сводка не найдена."}
+                    {algorithmDetail.summary ? (
+                      <Markdown content={algorithmDetail.summary} />
+                    ) : (
+                      "Сводка не найдена."
+                    )}
                   </div>
                 </div>
                 <div className="summary-card">
