@@ -54,6 +54,7 @@ def test_part_import_creates_reviews_and_today(
         json=import_payload,
     )
     assert import_response.status_code == 200
+    assert import_response.json()["reading_part"]["gpt_summary"]
     review_items = import_response.json()["review_items"]
     assert len(review_items) == 5
 
