@@ -19,9 +19,12 @@ def _build_training_out(attempt: AlgorithmTrainingAttempt) -> AlgorithmTrainingA
     return AlgorithmTrainingAttemptOut(
         id=attempt.id,
         algorithm_id=attempt.algorithm_id,
+        mode=attempt.mode,
         code_text=attempt.code_text,
         gpt_check_json=attempt.gpt_check_json,
         rating_1_to_5=attempt.rating_1_to_5,
+        accuracy=attempt.accuracy,
+        duration_sec=attempt.duration_sec,
         created_at=attempt.created_at,
     )
 
@@ -52,9 +55,12 @@ def create_algorithm_training(
 
     attempt = AlgorithmTrainingAttempt(
         algorithm_id=payload.algorithm_id,
+        mode=payload.mode,
         code_text=payload.code_text,
         gpt_check_json=gpt_payload,
         rating_1_to_5=rating,
+        accuracy=payload.accuracy,
+        duration_sec=payload.duration_sec,
     )
     session.add(attempt)
     session.commit()

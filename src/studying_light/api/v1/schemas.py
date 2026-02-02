@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from studying_light.api.v1.structures import (
     AlgorithmGptReviewResult,
@@ -335,7 +335,10 @@ class AlgorithmTrainingCreate(BaseModel):
     """Algorithm training attempt payload."""
 
     algorithm_id: int
+    mode: str = "memory"
     code_text: str
+    accuracy: float | None = None
+    duration_sec: int | None = None
     gpt_check_result: AlgorithmGptReviewResult | None = None
 
     @field_validator("algorithm_id")
@@ -354,15 +357,54 @@ class AlgorithmTrainingCreate(BaseModel):
             raise ValueError("code_text cannot be empty")
         return value
 
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        """Ensure mode is supported."""
+        if value not in {"memory", "typing"}:
+            raise ValueError("mode must be memory or typing")
+        return value
+
+    @field_validator("accuracy")
+    @classmethod
+    def validate_accuracy(cls, value: float | None) -> float | None:
+        """Ensure accuracy is within 0..100 when provided."""
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("accuracy must be between 0 and 100")
+        return value
+
+    @field_validator("duration_sec")
+    @classmethod
+    def validate_duration(cls, value: int | None) -> int | None:
+        """Ensure duration is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("duration_sec must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def validate_mode_requirements(self) -> "AlgorithmTrainingCreate":
+        """Ensure mode-specific fields are provided."""
+        if self.mode == "typing":
+            if self.accuracy is None or self.duration_sec is None:
+                raise ValueError("accuracy and duration_sec are required for typing")
+        return self
+
 
 class AlgorithmTrainingAttemptOut(BaseModel):
     """Algorithm training attempt response."""
 
     id: int
     algorithm_id: int
+    mode: str
     code_text: str
     gpt_check_json: dict | None = None
     rating_1_to_5: int | None = None
+    accuracy: float | None = None
+    duration_sec: int | None = None
     created_at: datetime
 
 

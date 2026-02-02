@@ -77,12 +77,14 @@ def test_algorithm_training_attempts(client) -> None:
         json={
             "algorithm_id": algorithm_id,
             "code_text": "attempt",
+            "mode": "memory",
             "gpt_check_result": gpt_payload,
         },
     )
     assert create_response.status_code == 201
     created = create_response.json()
     assert created["algorithm_id"] == algorithm_id
+    assert created["mode"] == "memory"
     assert created["rating_1_to_5"] == 4
     assert created["gpt_check_json"] is not None
 
@@ -94,3 +96,19 @@ def test_algorithm_training_attempts(client) -> None:
     items = list_response.json()
     assert len(items) == 1
     assert items[0]["id"] == created["id"]
+
+    typing_response = client.post(
+        "/api/v1/algorithm-trainings",
+        json={
+            "algorithm_id": algorithm_id,
+            "code_text": "typed",
+            "mode": "typing",
+            "accuracy": 92.5,
+            "duration_sec": 45,
+        },
+    )
+    assert typing_response.status_code == 201
+    typing_payload = typing_response.json()
+    assert typing_payload["mode"] == "typing"
+    assert typing_payload["accuracy"] == 92.5
+    assert typing_payload["duration_sec"] == 45

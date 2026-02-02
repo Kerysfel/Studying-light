@@ -11,9 +11,21 @@ const AlgorithmDetail = () => {
   const [copyState, setCopyState] = useState({ id: null, message: "" });
   const [bookTitles, setBookTitles] = useState(new Map());
   const [trainingVisible, setTrainingVisible] = useState(false);
+  const [trainingMode, setTrainingMode] = useState("memory");
   const [trainingCode, setTrainingCode] = useState("");
   const [trainingDiff, setTrainingDiff] = useState([]);
   const [showDiff, setShowDiff] = useState(false);
+  const [typingInput, setTypingInput] = useState("");
+  const [typingStartedAt, setTypingStartedAt] = useState(null);
+  const [typingElapsed, setTypingElapsed] = useState(0);
+  const [typingAccuracy, setTypingAccuracy] = useState(0);
+  const [typingSpeed, setTypingSpeed] = useState(0);
+  const [typingDiff, setTypingDiff] = useState([]);
+  const [typingSaveError, setTypingSaveError] = useState("");
+  const [typingSaveSuccess, setTypingSaveSuccess] = useState("");
+  const typingRef = useRef(null);
+  const typingOverlayRef = useRef(null);
+  const typingBackRef = useRef(null);
   const [trainingError, setTrainingError] = useState("");
   const [promptTemplate, setPromptTemplate] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
@@ -51,6 +63,18 @@ const AlgorithmDetail = () => {
     return () => {
       active = false;
     };
+  }, [id]);
+
+  useEffect(() => {
+    setTrainingCode("");
+    setTrainingDiff([]);
+    setShowDiff(false);
+    setTrainingError("");
+    setTrainingSaveError("");
+    setTrainingSaveSuccess("");
+    setGptJsonInput("");
+    resetTyping();
+    setTrainingMode("memory");
   }, [id]);
 
   useEffect(() => {
@@ -187,6 +211,144 @@ const AlgorithmDetail = () => {
       rows.push({ index: index + 1, left, right, type });
     }
     return rows;
+  };
+
+  const syncTypingScroll = () => {
+    if (!typingRef.current) {
+      return;
+    }
+    const { scrollTop, scrollLeft } = typingRef.current;
+    if (typingOverlayRef.current) {
+      typingOverlayRef.current.scrollTop = scrollTop;
+      typingOverlayRef.current.scrollLeft = scrollLeft;
+    }
+    if (typingBackRef.current) {
+      typingBackRef.current.scrollTop = scrollTop;
+      typingBackRef.current.scrollLeft = scrollLeft;
+    }
+  };
+
+  const computeTypingMetrics = (value, startedAt) => {
+    const reference = referenceSnippet?.code_text || "";
+    const maxLength = Math.max(reference.length, value.length);
+    let correct = 0;
+    let wrong = 0;
+    const diffRows = [];
+    for (let index = 0; index < maxLength; index += 1) {
+      const expected = reference[index] || "";
+      const actual = value[index] || "";
+      let status = "pending";
+      if (actual) {
+        if (actual === expected) {
+          status = "correct";
+          correct += 1;
+        } else {
+          status = "wrong";
+          wrong += 1;
+        }
+      } else if (expected) {
+        status = "pending";
+      }
+      diffRows.push({ expected, actual, status });
+    }
+    const totalTyped = value.length;
+    const accuracy =
+      totalTyped > 0 ? Math.round((correct / totalTyped) * 1000) / 10 : 0;
+    const elapsedSec = startedAt
+      ? Math.max((Date.now() - startedAt) / 1000, 0)
+      : 0;
+    const cps = elapsedSec > 0 ? Math.round((totalTyped / elapsedSec) * 10) / 10 : 0;
+    return {
+      accuracy,
+      elapsedSec,
+      cps,
+      diffRows,
+    };
+  };
+
+  const handleTypingInput = (event) => {
+    const value = event.target.value;
+    const startedAt = typingStartedAt ?? Date.now();
+    if (!typingStartedAt) {
+      setTypingStartedAt(startedAt);
+    }
+    setTypingInput(value);
+    const metrics = computeTypingMetrics(value, startedAt);
+    setTypingAccuracy(metrics.accuracy);
+    setTypingElapsed(metrics.elapsedSec);
+    setTypingSpeed(metrics.cps);
+    setTypingDiff(metrics.diffRows);
+    syncTypingScroll();
+  };
+
+  const handleTypingKeyDown = (event) => {
+    if (event.key !== "Tab") {
+      return;
+    }
+    event.preventDefault();
+    const target = event.target;
+    const start = target.selectionStart || 0;
+    const end = target.selectionEnd || 0;
+    const insert = "    ";
+    const nextValue =
+      typingInput.slice(0, start) + insert + typingInput.slice(end);
+    const startedAt = typingStartedAt ?? Date.now();
+    if (!typingStartedAt) {
+      setTypingStartedAt(startedAt);
+    }
+    setTypingInput(nextValue);
+    const metrics = computeTypingMetrics(nextValue, startedAt);
+    setTypingAccuracy(metrics.accuracy);
+    setTypingElapsed(metrics.elapsedSec);
+    setTypingSpeed(metrics.cps);
+    setTypingDiff(metrics.diffRows);
+    requestAnimationFrame(() => {
+      if (typingRef.current) {
+        typingRef.current.selectionStart = start + insert.length;
+        typingRef.current.selectionEnd = start + insert.length;
+      }
+    });
+  };
+
+  const resetTyping = () => {
+    setTypingInput("");
+    setTypingStartedAt(null);
+    setTypingElapsed(0);
+    setTypingAccuracy(0);
+    setTypingSpeed(0);
+    setTypingDiff([]);
+    setTypingSaveError("");
+    setTypingSaveSuccess("");
+  };
+
+  const handleSaveTyping = async () => {
+    setTypingSaveError("");
+    setTypingSaveSuccess("");
+    if (!typingInput.trim()) {
+      setTypingSaveError("Введите код для сохранения результата.");
+      return;
+    }
+    const duration = Math.max(Math.round(typingElapsed), 1);
+    try {
+      setTrainingSaving(true);
+      const response = await request("/algorithm-trainings", {
+        method: "POST",
+        body: JSON.stringify({
+          algorithm_id: Number(id),
+          mode: "typing",
+          code_text: typingInput,
+          accuracy: typingAccuracy,
+          duration_sec: duration,
+        }),
+      });
+      setLatestTraining(response);
+      await loadTrainings();
+      setTypingSaveSuccess("Результат сохранён.");
+    } catch (err) {
+      setTypingSaveError(getErrorMessage(err));
+    } finally {
+      setTrainingSaving(false);
+    }
   };
 
   const handleCompare = () => {
@@ -366,9 +528,16 @@ const AlgorithmDetail = () => {
           <div className="summary-block">
             <div className="summary-title">Последняя тренировка</div>
             <div className="summary-value">
-              {formatDateTime(latestTraining.created_at)}
+              {formatDateTime(latestTraining.created_at)} · Режим{" "}
+              {latestTraining.mode === "typing" ? "Печать" : "По памяти"}
               {typeof latestTraining.rating_1_to_5 === "number"
                 ? ` · Оценка ${latestTraining.rating_1_to_5}/5`
+                : ""}
+              {typeof latestTraining.accuracy === "number"
+                ? ` · Accuracy ${latestTraining.accuracy}%`
+                : ""}
+              {typeof latestTraining.duration_sec === "number"
+                ? ` · ${latestTraining.duration_sec} сек`
                 : ""}
             </div>
             {latestOverall && (
@@ -499,106 +668,189 @@ const AlgorithmDetail = () => {
 
         {trainingVisible && (
           <div className="summary-block training-panel">
-            <div className="summary-title">Тренировка по памяти</div>
-            <div className="summary-text">
-              Введите код по памяти и сравните с эталоном.
-            </div>
-            <textarea
-              ref={codeInputRef}
-              className="code-input"
-              rows="10"
-              value={trainingCode}
-              onChange={(event) => setTrainingCode(event.target.value)}
-              onKeyDown={handleCodeKeyDown}
-              placeholder="Введите код или псевдокод"
-            />
-            <div className="form-actions">
+            <div className="summary-title">Тренировка</div>
+            <div className="training-mode-tabs">
               <button
-                className="ghost-button"
+                className={`ghost-button${
+                  trainingMode === "memory" ? " active" : ""
+                }`}
                 type="button"
-                onClick={handleCompare}
+                onClick={() => setTrainingMode("memory")}
               >
-                Сравнить с эталоном
+                По памяти
               </button>
               <button
-                className="ghost-button"
+                className={`ghost-button${
+                  trainingMode === "typing" ? " active" : ""
+                }`}
                 type="button"
-                onClick={handleCopyPrompt}
-                disabled={promptLoading}
+                onClick={() => setTrainingMode("typing")}
               >
-                {promptLoading
-                  ? "Формирование..."
-                  : promptCopied
-                    ? "Промпт скопирован"
-                    : "Проверить с GPT"}
-              </button>
-              <button
-                className="ghost-button"
-                type="button"
-                onClick={() => handleSaveTraining({ requireGpt: false })}
-                disabled={trainingSaving}
-              >
-                {trainingSaving ? "Сохранение..." : "Сохранить попытку"}
+                Печать
               </button>
             </div>
-            {trainingError && <div className="alert error">{trainingError}</div>}
-            {trainingSaveError && (
-              <div className="alert error">{trainingSaveError}</div>
-            )}
-            {trainingSaveSuccess && (
-              <div className="alert success">{trainingSaveSuccess}</div>
-            )}
 
-            {showDiff && (
-              <div className="diff-table">
-                <div className="diff-header-row">
-                  <div className="diff-header">Ваш код</div>
-                  <div className="diff-header">Эталон</div>
+            {trainingMode === "memory" && (
+              <>
+                <div className="summary-text">
+                  Введите код по памяти и сравните с эталоном.
                 </div>
-                <div className="diff-body">
-                  {trainingDiff.map((row) => (
-                    <div
-                      key={`diff-${row.index}`}
-                      className={`diff-line ${row.type}`}
-                    >
-                      <div className="diff-cell">
-                        <span className="diff-line-number">{row.index}</span>
-                        <span className="diff-line-text">
-                          {row.left || " "}
-                        </span>
-                      </div>
-                      <div className="diff-cell">
-                        <span className="diff-line-number">{row.index}</span>
-                        <span className="diff-line-text">
-                          {row.right || " "}
-                        </span>
-                      </div>
+                <textarea
+                  ref={codeInputRef}
+                  className="code-input"
+                  rows="10"
+                  value={trainingCode}
+                  onChange={(event) => setTrainingCode(event.target.value)}
+                  onKeyDown={handleCodeKeyDown}
+                  placeholder="Введите код или псевдокод"
+                />
+                <div className="form-actions">
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={handleCompare}
+                  >
+                    Сравнить с эталоном
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={handleCopyPrompt}
+                    disabled={promptLoading}
+                  >
+                    {promptLoading
+                      ? "Формирование..."
+                      : promptCopied
+                        ? "Промпт скопирован"
+                        : "Проверить с GPT"}
+                  </button>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={() => handleSaveTraining({ requireGpt: false })}
+                    disabled={trainingSaving}
+                  >
+                    {trainingSaving ? "Сохранение..." : "Сохранить попытку"}
+                  </button>
+                </div>
+                {trainingError && <div className="alert error">{trainingError}</div>}
+                {trainingSaveError && (
+                  <div className="alert error">{trainingSaveError}</div>
+                )}
+                {trainingSaveSuccess && (
+                  <div className="alert success">{trainingSaveSuccess}</div>
+                )}
+
+                {showDiff && (
+                  <div className="diff-table">
+                    <div className="diff-header-row">
+                      <div className="diff-header">Ваш код</div>
+                      <div className="diff-header">Эталон</div>
                     </div>
-                  ))}
+                    <div className="diff-body">
+                      {trainingDiff.map((row) => (
+                        <div
+                          key={`diff-${row.index}`}
+                          className={`diff-line ${row.type}`}
+                        >
+                          <div className="diff-cell">
+                            <span className="diff-line-number">{row.index}</span>
+                            <span className="diff-line-text">
+                              {row.left || " "}
+                            </span>
+                          </div>
+                          <div className="diff-cell">
+                            <span className="diff-line-number">{row.index}</span>
+                            <span className="diff-line-text">
+                              {row.right || " "}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="summary-card">
+                  <div className="summary-title">JSON оценка GPT</div>
+                  <textarea
+                    rows="6"
+                    className="code-input"
+                    value={gptJsonInput}
+                    onChange={(event) => setGptJsonInput(event.target.value)}
+                    placeholder="Вставьте JSON результата проверки"
+                  />
+                  <div className="form-actions">
+                    <button
+                      className="primary-button"
+                      type="button"
+                      onClick={() => handleSaveTraining({ requireGpt: true })}
+                      disabled={trainingSaving}
+                    >
+                      Сохранить оценку
+                    </button>
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
-            <div className="summary-card">
-              <div className="summary-title">JSON оценка GPT</div>
-              <textarea
-                rows="6"
-                className="code-input"
-                value={gptJsonInput}
-                onChange={(event) => setGptJsonInput(event.target.value)}
-                placeholder="Вставьте JSON результата проверки"
-              />
-              <div className="form-actions">
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => handleSaveTraining({ requireGpt: true })}
-                  disabled={trainingSaving}
-                >
-                  Сохранить оценку
-                </button>
-              </div>
-            </div>
+            {trainingMode === "typing" && (
+              <>
+                <div className="summary-text">
+                  Печатайте код поверх эталона. Ошибки подсвечиваются сразу.
+                </div>
+                <div className="typing-metrics">
+                  <div>
+                    Accuracy: {typingAccuracy}% · Время:{" "}
+                    {Math.round(typingElapsed)} сек · Скорость: {typingSpeed} сим/сек
+                  </div>
+                  <button
+                    className="ghost-button"
+                    type="button"
+                    onClick={resetTyping}
+                  >
+                    Сбросить
+                  </button>
+                </div>
+                <div className="typing-shadow">
+                  <pre className="typing-layer typing-reference" ref={typingBackRef}>
+                    {referenceSnippet?.code_text || "Нет эталона"}
+                  </pre>
+                  <pre className="typing-layer typing-overlay" ref={typingOverlayRef}>
+                    {typingDiff.map((item, index) => (
+                      <span key={`typing-${index}`} className={item.status}>
+                        {item.actual || " "}
+                      </span>
+                    ))}
+                  </pre>
+                  <textarea
+                    ref={typingRef}
+                    className="typing-input"
+                    value={typingInput}
+                    onChange={handleTypingInput}
+                    onKeyDown={handleTypingKeyDown}
+                    onScroll={syncTypingScroll}
+                    placeholder="Начните печатать здесь"
+                  />
+                </div>
+                {typingSaveError && (
+                  <div className="alert error">{typingSaveError}</div>
+                )}
+                {typingSaveSuccess && (
+                  <div className="alert success">{typingSaveSuccess}</div>
+                )}
+                <div className="form-actions">
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={handleSaveTyping}
+                    disabled={trainingSaving}
+                  >
+                    Сохранить результат
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         )}
       </section>
