@@ -175,6 +175,7 @@ class ReviewItemOut(BaseModel):
     book_title: str
     part_index: int
     label: str | None = None
+    gpt_rating_1_to_5: int | None = None
 
 
 class ReviewDetailOut(BaseModel):
@@ -224,6 +225,22 @@ class ReviewPartStatsOut(BaseModel):
     completed_reviews: int
     gpt_attempts_total: int
     gpt_average_rating: float | None = None
+
+
+class ReviewStatsSummaryOut(BaseModel):
+    """Summary review stats for a time window."""
+
+    average_rating_7d: float | None = None
+    average_rating_30d: float | None = None
+    planned_count: int
+    completed_count: int
+
+
+class StatsOverviewOut(BaseModel):
+    """Overview stats for theory and algorithm reviews."""
+
+    theory: ReviewStatsSummaryOut
+    algorithms: ReviewStatsSummaryOut
 
 
 class BookProgressOut(BaseModel):
@@ -540,6 +557,7 @@ class AlgorithmReviewItemOut(BaseModel):
     group_id: int
     group_title: str
     title: str
+    gpt_rating_1_to_5: int | None = None
 
 
 class AlgorithmReviewDetailOut(BaseModel):

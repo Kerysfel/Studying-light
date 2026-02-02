@@ -49,6 +49,7 @@ def _build_review_item_out(
     item: ReviewScheduleItem,
     part: ReadingPart,
     book: Book,
+    gpt_rating_1_to_5: int | None = None,
 ) -> ReviewItemOut:
     """Build review item response."""
     return ReviewItemOut(
@@ -61,14 +62,22 @@ def _build_review_item_out(
         book_title=book.title,
         part_index=part.part_index,
         label=part.label,
+        gpt_rating_1_to_5=gpt_rating_1_to_5,
     )
 
 
 @router.get("/reviews/today")
 def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut]:
     """List planned review items, including overdue ones."""
+    latest_rating = (
+        select(ReviewAttempt.gpt_rating_1_to_5)
+        .where(ReviewAttempt.review_item_id == ReviewScheduleItem.id)
+        .order_by(ReviewAttempt.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
     rows = session.execute(
-        select(ReviewScheduleItem, ReadingPart, Book)
+        select(ReviewScheduleItem, ReadingPart, Book, latest_rating)
         .join(ReadingPart, ReviewScheduleItem.reading_part_id == ReadingPart.id)
         .join(Book, ReadingPart.book_id == Book.id)
         .where(
@@ -77,7 +86,10 @@ def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut
         .order_by(ReviewScheduleItem.due_date, ReviewScheduleItem.id)
     ).all()
 
-    return [_build_review_item_out(item, part, book) for item, part, book in rows]
+    return [
+        _build_review_item_out(item, part, book, rating)
+        for item, part, book, rating in rows
+    ]
 
 
 @router.get("/reviews/schedule")

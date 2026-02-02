@@ -27,6 +27,7 @@ def _build_algorithm_review_item_out(
     item: AlgorithmReviewItem,
     algorithm: Algorithm,
     group: AlgorithmGroup,
+    gpt_rating_1_to_5: int | None = None,
 ) -> AlgorithmReviewItemOut:
     """Build algorithm review item response."""
     return AlgorithmReviewItemOut(
@@ -38,6 +39,7 @@ def _build_algorithm_review_item_out(
         group_id=group.id,
         group_title=group.title,
         title=algorithm.title,
+        gpt_rating_1_to_5=gpt_rating_1_to_5,
     )
 
 
@@ -47,8 +49,15 @@ def algorithm_reviews_today(
 ) -> list[AlgorithmReviewItemOut]:
     """List planned algorithm review items scheduled for today or later."""
     today = date.today()
+    latest_rating = (
+        select(AlgorithmReviewAttempt.rating_1_to_5)
+        .where(AlgorithmReviewAttempt.review_item_id == AlgorithmReviewItem.id)
+        .order_by(AlgorithmReviewAttempt.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
     rows = session.execute(
-        select(AlgorithmReviewItem, Algorithm, AlgorithmGroup)
+        select(AlgorithmReviewItem, Algorithm, AlgorithmGroup, latest_rating)
         .join(Algorithm, AlgorithmReviewItem.algorithm_id == Algorithm.id)
         .join(AlgorithmGroup, Algorithm.group_id == AlgorithmGroup.id)
         .where(
@@ -59,8 +68,8 @@ def algorithm_reviews_today(
     ).all()
 
     return [
-        _build_algorithm_review_item_out(item, algorithm, group)
-        for item, algorithm, group in rows
+        _build_algorithm_review_item_out(item, algorithm, group, rating)
+        for item, algorithm, group, rating in rows
     ]
 
 
