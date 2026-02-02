@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request } from "../api.js";
 
@@ -21,6 +21,9 @@ const formatDate = (value) => {
   return date.toLocaleDateString();
 };
 
+const normalizeTitle = (value) =>
+  typeof value === "string" ? value.trim().toLowerCase() : "";
+
 const ImportExport = () => {
   const [books, setBooks] = useState([]);
   const [parts, setParts] = useState([]);
@@ -33,10 +36,14 @@ const ImportExport = () => {
   const [success, setSuccess] = useState("");
   const [algorithmPayload, setAlgorithmPayload] = useState("");
   const [algorithmItems, setAlgorithmItems] = useState([]);
-  const [algorithmError, setAlgorithmError] = useState("");
+  const [algorithmError, setAlgorithmError] = useState(null);
   const [algorithmSuccess, setAlgorithmSuccess] = useState("");
+  const [algorithmImportResult, setAlgorithmImportResult] = useState(null);
+  const [algorithmImportLoading, setAlgorithmImportLoading] = useState(false);
   const [groupSuggestions, setGroupSuggestions] = useState([]);
   const [groupOptions, setGroupOptions] = useState([]);
+  const [groupsLoading, setGroupsLoading] = useState(false);
+  const [groupsError, setGroupsError] = useState("");
   const [groupAssignments, setGroupAssignments] = useState({});
   const [bulkGroupId, setBulkGroupId] = useState("");
   const [creatingGroupFor, setCreatingGroupFor] = useState(null);
@@ -45,6 +52,36 @@ const ImportExport = () => {
   const [groupNotes, setGroupNotes] = useState("");
   const [groupFormError, setGroupFormError] = useState("");
   const groupIdRef = useRef(1);
+
+  const loadGroups = useCallback(
+    async ({ preserveNew = true } = {}) => {
+      try {
+        setGroupsLoading(true);
+        setGroupsError("");
+        const data = await request("/algorithm-groups");
+        const existingGroups = data.map((group) => ({
+          id: `existing-${group.id}`,
+          source: "existing",
+          groupId: group.id,
+          title: group.title,
+          description: group.description,
+          notes: group.notes,
+        }));
+        setGroupOptions((prev) => {
+          if (!preserveNew) {
+            return existingGroups;
+          }
+          const newGroups = prev.filter((item) => item.source === "new");
+          return [...existingGroups, ...newGroups];
+        });
+      } catch (err) {
+        setGroupsError(getErrorMessage(err));
+      } finally {
+        setGroupsLoading(false);
+      }
+    },
+    []
+  );
 
   useEffect(() => {
     let active = true;
@@ -67,6 +104,10 @@ const ImportExport = () => {
       active = false;
     };
   }, []);
+
+  useEffect(() => {
+    loadGroups();
+  }, [loadGroups]);
 
   useEffect(() => {
     let active = true;
@@ -116,6 +157,26 @@ const ImportExport = () => {
     [parts, selectedPartId]
   );
 
+  const groupSelectOptions = useMemo(
+    () =>
+      groupOptions.map((group) => ({
+        value: group.id,
+        label:
+          group.source === "new" ? `Новая: ${group.title}` : group.title,
+      })),
+    [groupOptions]
+  );
+
+  const groupTitleById = useMemo(() => {
+    const map = new Map();
+    groupOptions.forEach((group) => {
+      if (group.source === "existing") {
+        map.set(group.groupId, group.title);
+      }
+    });
+    return map;
+  }, [groupOptions]);
+
   const handleImport = async () => {
     setError("");
     setSuccess("");
@@ -162,9 +223,12 @@ const ImportExport = () => {
     setGroupFormError("");
   };
 
-  const openGroupForm = (index) => {
-    const suggested = algorithmItems[index]?.suggested_group || "";
-    setCreatingGroupFor(index);
+  const openGroupForm = (target) => {
+    const suggested =
+      typeof target === "number"
+        ? algorithmItems[target]?.suggested_group || ""
+        : "";
+    setCreatingGroupFor(target);
     setGroupTitle(suggested);
     setGroupDescription("");
     setGroupNotes("");
@@ -182,7 +246,10 @@ const ImportExport = () => {
       setGroupDescription(`Группа алгоритмов: ${title}.`);
     }
     if (!groupNotes.trim()) {
-      const algorithmTitle = algorithmItems[creatingGroupFor]?.title || "";
+      const algorithmTitle =
+        typeof creatingGroupFor === "number"
+          ? algorithmItems[creatingGroupFor]?.title || ""
+          : "";
       const base = algorithmTitle ? `Алгоритмы: ${algorithmTitle}.` : "";
       setGroupNotes(base || "Формулы/инварианты структуры: ");
     }
@@ -194,23 +261,89 @@ const ImportExport = () => {
       setGroupFormError("Введите название группы.");
       return;
     }
-    const id = `group-${groupIdRef.current}`;
+    const id = `new-${groupIdRef.current}`;
     groupIdRef.current += 1;
     const group = {
       id,
       title,
       description: groupDescription.trim() || null,
       notes: groupNotes.trim() || null,
+      source: "new",
     };
     setGroupOptions((prev) => [...prev, group]);
-    setGroupAssignments((prev) => ({ ...prev, [creatingGroupFor]: id }));
+    if (creatingGroupFor === "bulk") {
+      setBulkGroupId(id);
+      const nextAssignments = {};
+      algorithmItems.forEach((_, index) => {
+        nextAssignments[index] = id;
+      });
+      setGroupAssignments(nextAssignments);
+    } else if (typeof creatingGroupFor === "number") {
+      setGroupAssignments((prev) => ({ ...prev, [creatingGroupFor]: id }));
+    }
     setCreatingGroupFor(null);
     resetGroupForm();
   };
 
+  const renderGroupForm = () => (
+    <div className="summary-card group-form">
+      <div className="form-block">
+        <label>Название группы</label>
+        <input
+          value={groupTitle}
+          onChange={(event) => setGroupTitle(event.target.value)}
+          placeholder="Например, D-куча"
+        />
+      </div>
+      <div className="form-block">
+        <label>Описание (опционально)</label>
+        <textarea
+          rows="3"
+          value={groupDescription}
+          onChange={(event) => setGroupDescription(event.target.value)}
+          placeholder="Коротко о структуре данных"
+        />
+      </div>
+      <div className="form-block">
+        <label>Формулы/инварианты структуры (опционально)</label>
+        <textarea
+          rows="3"
+          value={groupNotes}
+          onChange={(event) => setGroupNotes(event.target.value)}
+          placeholder="Формулы, инварианты, базовые свойства"
+        />
+      </div>
+      {groupFormError && <div className="alert error">{groupFormError}</div>}
+      <div className="form-actions">
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={handleGenerateGroupNotes}
+        >
+          Сгенерировать справку
+        </button>
+        <button
+          className="ghost-button"
+          type="button"
+          onClick={() => setCreatingGroupFor(null)}
+        >
+          Отмена
+        </button>
+        <button
+          className="primary-button"
+          type="button"
+          onClick={handleCreateGroup}
+        >
+          Создать группу
+        </button>
+      </div>
+    </div>
+  );
+
   const handleAlgorithmParse = () => {
-    setAlgorithmError("");
+    setAlgorithmError(null);
     setAlgorithmSuccess("");
+    setAlgorithmImportResult(null);
     setAlgorithmItems([]);
     setGroupSuggestions([]);
     setGroupAssignments({});
@@ -220,7 +353,11 @@ const ImportExport = () => {
 
     const raw = algorithmPayload.trim();
     if (!raw) {
-      setAlgorithmError("Вставьте JSON с алгоритмами.");
+      setAlgorithmError({
+        message: "Вставьте JSON с алгоритмами.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
@@ -228,17 +365,29 @@ const ImportExport = () => {
     try {
       data = JSON.parse(raw);
     } catch (err) {
-      setAlgorithmError("Некорректный JSON для алгоритмов.");
+      setAlgorithmError({
+        message: "Некорректный JSON для алгоритмов.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
     if (!data || typeof data !== "object" || Array.isArray(data)) {
-      setAlgorithmError("Ожидается JSON-объект с полем algorithms.");
+      setAlgorithmError({
+        message: "Ожидается JSON-объект с полем algorithms.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
     if (!Array.isArray(data.algorithms)) {
-      setAlgorithmError("Поле algorithms должно быть массивом.");
+      setAlgorithmError({
+        message: "Поле algorithms должно быть массивом.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
@@ -257,13 +406,21 @@ const ImportExport = () => {
       }));
 
     if (!algorithms.length) {
-      setAlgorithmError("JSON не содержит алгоритмов для импорта.");
+      setAlgorithmError({
+        message: "JSON не содержит алгоритмов для импорта.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
     const hasMissingTitle = algorithms.some((item) => !item.title);
     if (hasMissingTitle) {
-      setAlgorithmError("Каждый алгоритм должен иметь title.");
+      setAlgorithmError({
+        message: "Каждый алгоритм должен иметь title.",
+        code: null,
+        detail: null,
+      });
       return;
     }
 
@@ -296,35 +453,117 @@ const ImportExport = () => {
     setGroupAssignments(nextAssignments);
   };
 
-  const handleAlgorithmImport = () => {
-    setAlgorithmError("");
+  const handleAlgorithmImport = async () => {
+    setAlgorithmError(null);
     setAlgorithmSuccess("");
+    setAlgorithmImportResult(null);
     if (!algorithmItems.length) {
-      setAlgorithmError("Сначала вставьте и разберите JSON.");
+      setAlgorithmError({
+        message: "Сначала вставьте и разберите JSON.",
+        code: null,
+        detail: null,
+      });
       return;
     }
     const missing = algorithmItems.filter(
       (_, index) => !groupAssignments[index]
     );
     if (missing.length) {
-      setAlgorithmError("Выберите группу для каждого алгоритма.");
+      setAlgorithmError({
+        message: "Выберите группу для каждого алгоритма.",
+        code: null,
+        detail: null,
+      });
       return;
     }
+
     const groupsById = new Map(
       groupOptions.map((group) => [group.id, group])
     );
+    const groupsPayload = new Map();
+    let hasInvalidAssignment = false;
+    const algorithmsPayload = algorithmItems.map((item, index) => {
+      const assignment = groupAssignments[index];
+      const group = groupsById.get(assignment);
+      if (!group) {
+        hasInvalidAssignment = true;
+        return null;
+      }
+      const base = {
+        title: item.title,
+        summary: item.summary,
+        when_to_use: item.when_to_use,
+        complexity: item.complexity,
+        invariants: item.invariants,
+        steps: item.steps,
+        corner_cases: item.corner_cases,
+        review_questions_by_interval: item.review_questions_by_interval,
+        code: item.code,
+        suggested_group: item.suggested_group || null,
+        source_part_id: item.source_part_id ?? null,
+      };
+
+      if (group.source === "existing") {
+        return { ...base, group_id: group.groupId };
+      }
+
+      const normalized = normalizeTitle(group.title);
+      if (!groupsPayload.has(normalized)) {
+        groupsPayload.set(normalized, {
+          title: group.title,
+          description: group.description || null,
+          notes: group.notes || null,
+        });
+      }
+      return { ...base, group_title_new: group.title };
+    });
+
+    if (hasInvalidAssignment || algorithmsPayload.some((item) => !item)) {
+      setAlgorithmError({
+        message: "Выбранная группа недоступна. Обновите список.",
+        code: null,
+        detail: null,
+      });
+      return;
+    }
+
     const prepared = {
-      groups: groupOptions,
-      algorithms: algorithmItems.map((item, index) => ({
-        ...item,
-        group_id: groupAssignments[index],
-        group_title: groupsById.get(groupAssignments[index])?.title || null,
-      })),
+      groups: Array.from(groupsPayload.values()),
+      algorithms: algorithmsPayload,
     };
-    localStorage.setItem("algorithmImportDraft", JSON.stringify(prepared));
-    setAlgorithmSuccess(
-      `Импорт подготовлен. Алгоритмов: ${algorithmItems.length}.`
-    );
+
+    try {
+      setAlgorithmImportLoading(true);
+      const response = await request("/algorithms/import", {
+        method: "POST",
+        body: JSON.stringify(prepared),
+      });
+      const createdItems = Array.isArray(response.algorithms_created)
+        ? response.algorithms_created
+        : [];
+      const resultItems = createdItems.map((item, index) => ({
+        ...item,
+        title: algorithmItems[index]?.title || `Алгоритм ${index + 1}`,
+      }));
+      setAlgorithmImportResult({
+        ...response,
+        algorithms_created: resultItems,
+      });
+      setAlgorithmSuccess(
+        `Импорт завершен. Алгоритмов: ${resultItems.length}. Повторений: ${
+          response.review_items_created || 0
+        }.`
+      );
+      loadGroups({ preserveNew: false });
+    } catch (err) {
+      setAlgorithmError({
+        message: getErrorMessage(err),
+        code: err.code || null,
+        detail: err.detail || null,
+      });
+    } finally {
+      setAlgorithmImportLoading(false);
+    }
   };
 
   const canImportAlgorithms = useMemo(
@@ -418,6 +657,8 @@ const ImportExport = () => {
             </p>
           </div>
         </div>
+        {groupsLoading && <p className="muted">Загрузка групп...</p>}
+        {groupsError && <div className="alert error">{groupsError}</div>}
         <div className="form-grid">
           <div className="form-block full">
             <label>JSON</label>
@@ -426,8 +667,9 @@ const ImportExport = () => {
               value={algorithmPayload}
               onChange={(event) => {
                 setAlgorithmPayload(event.target.value);
-                setAlgorithmError("");
+                setAlgorithmError(null);
                 setAlgorithmSuccess("");
+                setAlgorithmImportResult(null);
               }}
               onBlur={handleAlgorithmParse}
               placeholder='{"group_suggestions": [], "algorithms": [...]}'
@@ -443,9 +685,66 @@ const ImportExport = () => {
             Разобрать JSON
           </button>
         </div>
-        {algorithmError && <div className="alert error">{algorithmError}</div>}
+        {algorithmError && (
+          <div className="alert error">
+            <div>{algorithmError.message}</div>
+            {(algorithmError.detail || algorithmError.code) && (
+              <div className="muted">
+                {algorithmError.detail && (
+                  <span>Детали: {algorithmError.detail}. </span>
+                )}
+                {algorithmError.code && (
+                  <span>Код: {algorithmError.code}.</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {algorithmSuccess && (
           <div className="alert success">{algorithmSuccess}</div>
+        )}
+        {algorithmImportResult && (
+          <div className="summary-block">
+            <div className="summary-title">Результаты импорта</div>
+            <div className="summary-value">
+              Алгоритмов: {algorithmImportResult.algorithms_created?.length || 0} ·
+              Повторений: {algorithmImportResult.review_items_created || 0}
+            </div>
+            <div className="list">
+              {(algorithmImportResult.algorithms_created || []).map((item) => {
+                const groupTitle =
+                  groupTitleById.get(item.group_id) || `Группа #${item.group_id}`;
+                return (
+                  <div
+                    key={`${item.algorithm_id}-${item.group_id}`}
+                    className="list-row"
+                  >
+                    <div>
+                      <div className="list-title">
+                        <a
+                          href={`/api/v1/algorithms/${item.algorithm_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {item.title || `Алгоритм #${item.algorithm_id}`}
+                        </a>
+                      </div>
+                      <div className="list-meta">
+                        Группа{" "}
+                        <a
+                          href={`/api/v1/algorithm-groups/${item.group_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {groupTitle}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {algorithmItems.length > 0 && (
@@ -470,32 +769,42 @@ const ImportExport = () => {
               </div>
             )}
 
-            {groupOptions.length > 0 && (
-              <div className="form-inline">
-                <div className="form-block">
-                  <label>Группа для всех</label>
-                  <select
-                    value={bulkGroupId}
-                    onChange={(event) => setBulkGroupId(event.target.value)}
-                  >
-                    <option value="">Выберите группу</option>
-                    {groupOptions.map((group) => (
-                      <option key={group.id} value={group.id}>
-                        {group.title}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <button
-                  className="ghost-button"
-                  type="button"
-                  onClick={handleApplyGroupToAll}
-                  disabled={!bulkGroupId}
+            <div className="form-inline">
+              <div className="form-block">
+                <label>Группа для всех</label>
+                <select
+                  value={bulkGroupId}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    if (value === "__new__") {
+                      openGroupForm("bulk");
+                      setBulkGroupId("");
+                      return;
+                    }
+                    setBulkGroupId(value);
+                  }}
+                  disabled={groupsLoading}
                 >
-                  Применить ко всем
-                </button>
+                  <option value="">Выберите группу</option>
+                  {groupSelectOptions.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                  <option value="__new__">+ Создать новую группу</option>
+                </select>
               </div>
-            )}
+              <button
+                className="ghost-button"
+                type="button"
+                onClick={handleApplyGroupToAll}
+                disabled={!bulkGroupId || groupsLoading}
+              >
+                Применить ко всем
+              </button>
+            </div>
+
+            {creatingGroupFor === "bulk" && renderGroupForm()}
 
             <div className="list">
               {algorithmItems.map((item, index) => (
@@ -521,87 +830,34 @@ const ImportExport = () => {
                       <label>Группа</label>
                       <select
                         value={groupAssignments[index] || ""}
-                        onChange={(event) =>
+                        onChange={(event) => {
+                          const value = event.target.value;
+                          if (value === "__new__") {
+                            openGroupForm(index);
+                            setGroupAssignments((prev) => ({
+                              ...prev,
+                              [index]: "",
+                            }));
+                            return;
+                          }
                           setGroupAssignments((prev) => ({
                             ...prev,
-                            [index]: event.target.value,
-                          }))
-                        }
+                            [index]: value,
+                          }));
+                        }}
+                        disabled={groupsLoading}
                       >
                         <option value="">Выберите группу</option>
-                        {groupOptions.map((group) => (
-                          <option key={group.id} value={group.id}>
-                            {group.title}
+                        {groupSelectOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
                           </option>
                         ))}
+                        <option value="__new__">+ Создать новую группу</option>
                       </select>
                     </div>
-                    <button
-                      className="ghost-button"
-                      type="button"
-                      onClick={() => openGroupForm(index)}
-                    >
-                      Создать новую группу
-                    </button>
                   </div>
-                  {creatingGroupFor === index && (
-                    <div className="summary-card group-form">
-                      <div className="form-block">
-                        <label>Название группы</label>
-                        <input
-                          value={groupTitle}
-                          onChange={(event) => setGroupTitle(event.target.value)}
-                          placeholder="Например, D-куча"
-                        />
-                      </div>
-                      <div className="form-block">
-                        <label>Описание (опционально)</label>
-                        <textarea
-                          rows="3"
-                          value={groupDescription}
-                          onChange={(event) =>
-                            setGroupDescription(event.target.value)
-                          }
-                          placeholder="Коротко о структуре данных"
-                        />
-                      </div>
-                      <div className="form-block">
-                        <label>Формулы/инварианты структуры (опционально)</label>
-                        <textarea
-                          rows="3"
-                          value={groupNotes}
-                          onChange={(event) => setGroupNotes(event.target.value)}
-                          placeholder="Формулы, инварианты, базовые свойства"
-                        />
-                      </div>
-                      {groupFormError && (
-                        <div className="alert error">{groupFormError}</div>
-                      )}
-                      <div className="form-actions">
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={handleGenerateGroupNotes}
-                        >
-                          Сгенерировать справку
-                        </button>
-                        <button
-                          className="ghost-button"
-                          type="button"
-                          onClick={() => setCreatingGroupFor(null)}
-                        >
-                          Отмена
-                        </button>
-                        <button
-                          className="primary-button"
-                          type="button"
-                          onClick={handleCreateGroup}
-                        >
-                          Создать группу
-                        </button>
-                      </div>
-                    </div>
-                  )}
+                  {creatingGroupFor === index && renderGroupForm()}
                 </div>
               ))}
             </div>
@@ -611,9 +867,9 @@ const ImportExport = () => {
                 className="primary-button"
                 type="button"
                 onClick={handleAlgorithmImport}
-                disabled={!canImportAlgorithms}
+                disabled={!canImportAlgorithms || algorithmImportLoading || groupsLoading}
               >
-                Импортировать
+                {algorithmImportLoading ? "Импорт..." : "Импортировать"}
               </button>
             </div>
           </>
