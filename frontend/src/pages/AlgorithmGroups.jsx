@@ -8,6 +8,11 @@ const AlgorithmGroups = () => {
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [createTitle, setCreateTitle] = useState("");
+  const [createDescription, setCreateDescription] = useState("");
+  const [createNotes, setCreateNotes] = useState("");
+  const [createError, setCreateError] = useState("");
+  const [createLoading, setCreateLoading] = useState(false);
 
   const loadGroups = async (searchValue = "") => {
     try {
@@ -34,6 +39,34 @@ const AlgorithmGroups = () => {
     loadGroups(query);
   };
 
+  const handleCreate = async (event) => {
+    event.preventDefault();
+    setCreateError("");
+    if (!createTitle.trim()) {
+      setCreateError("Введите название группы.");
+      return;
+    }
+    try {
+      setCreateLoading(true);
+      await request("/algorithm-groups", {
+        method: "POST",
+        body: JSON.stringify({
+          title: createTitle.trim(),
+          description: createDescription.trim() || null,
+          notes: createNotes.trim() || null,
+        }),
+      });
+      setCreateTitle("");
+      setCreateDescription("");
+      setCreateNotes("");
+      await loadGroups(query);
+    } catch (err) {
+      setCreateError(getErrorMessage(err));
+    } finally {
+      setCreateLoading(false);
+    }
+  };
+
   return (
     <div className="page-grid">
       <section className="panel">
@@ -45,6 +78,46 @@ const AlgorithmGroups = () => {
             </p>
           </div>
         </div>
+
+        <form className="summary-card" onSubmit={handleCreate}>
+          <div className="summary-title">Новая группа</div>
+          <div className="form-grid">
+            <div className="form-block full">
+              <label>Название</label>
+              <input
+                value={createTitle}
+                onChange={(event) => setCreateTitle(event.target.value)}
+                placeholder="Например, Графы"
+              />
+            </div>
+            <div className="form-block full">
+              <label>Описание (опционально)</label>
+              <textarea
+                rows="2"
+                value={createDescription}
+                onChange={(event) => setCreateDescription(event.target.value)}
+              />
+            </div>
+            <div className="form-block full">
+              <label>Заметки (опционально)</label>
+              <textarea
+                rows="2"
+                value={createNotes}
+                onChange={(event) => setCreateNotes(event.target.value)}
+              />
+            </div>
+          </div>
+          {createError && <div className="alert error">{createError}</div>}
+          <div className="form-actions">
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={createLoading}
+            >
+              {createLoading ? "Сохранение..." : "Создать группу"}
+            </button>
+          </div>
+        </form>
 
         <form className="form-inline" onSubmit={handleSearch}>
           <div className="form-block">

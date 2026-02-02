@@ -1,7 +1,7 @@
 """Algorithm group management endpoints."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from studying_light.api.v1.schemas import (
@@ -9,6 +9,7 @@ from studying_light.api.v1.schemas import (
     AlgorithmGroupCreate,
     AlgorithmGroupDetailOut,
     AlgorithmGroupListOut,
+    AlgorithmGroupMergePayload,
     AlgorithmGroupUpdate,
 )
 from studying_light.db.models.algorithm import Algorithm
@@ -198,3 +199,39 @@ def update_algorithm_group(
     session.commit()
     session.refresh(group)
     return _build_group_detail(session, group)
+
+
+@router.post("/algorithm-groups/{group_id}/merge")
+def merge_algorithm_group(
+    group_id: int,
+    payload: AlgorithmGroupMergePayload,
+    session: Session = Depends(get_session),
+) -> AlgorithmGroupDetailOut:
+    """Merge a source group into a target group."""
+    if group_id == payload.target_group_id:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "detail": "target_group_id must be different from source",
+                "code": "BAD_REQUEST",
+            },
+        )
+
+    source = session.get(AlgorithmGroup, group_id)
+    target = session.get(AlgorithmGroup, payload.target_group_id)
+    if not source or not target:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Algorithm group not found", "code": "NOT_FOUND"},
+        )
+
+    session.execute(
+        update(Algorithm)
+        .where(Algorithm.group_id == source.id)
+        .values(group_id=target.id)
+    )
+    session.delete(source)
+    session.commit()
+
+    session.refresh(target)
+    return _build_group_detail(session, target)

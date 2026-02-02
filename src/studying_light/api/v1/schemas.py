@@ -474,6 +474,20 @@ class AlgorithmGroupDetailOut(BaseModel):
     algorithms: list[AlgorithmGroupAlgorithmOut]
 
 
+class AlgorithmGroupMergePayload(BaseModel):
+    """Algorithm group merge payload."""
+
+    target_group_id: int
+
+    @field_validator("target_group_id")
+    @classmethod
+    def validate_target_group_id(cls, value: int) -> int:
+        """Ensure target group id is positive."""
+        if value <= 0:
+            raise ValueError("target_group_id must be positive")
+        return value
+
+
 class AlgorithmCodeSnippetOut(BaseModel):
     """Algorithm code snippet response."""
 
