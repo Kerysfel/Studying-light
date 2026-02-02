@@ -56,7 +56,8 @@ class AlgorithmGroupPayload(BaseModel):
     @classmethod
     def validate_title(cls, value: str) -> str:
         """Ensure group title is not empty."""
-        if not value.strip():
+        value = value.strip()
+        if not value:
             raise ValueError("group title cannot be empty")
         return value
 
