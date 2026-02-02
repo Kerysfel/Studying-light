@@ -331,6 +331,41 @@ class AlgorithmImportResponse(BaseModel):
     review_items_created: int
 
 
+class AlgorithmTrainingCreate(BaseModel):
+    """Algorithm training attempt payload."""
+
+    algorithm_id: int
+    code_text: str
+    gpt_check_result: AlgorithmGptReviewResult | None = None
+
+    @field_validator("algorithm_id")
+    @classmethod
+    def validate_algorithm_id(cls, value: int) -> int:
+        """Ensure algorithm_id is positive."""
+        if value <= 0:
+            raise ValueError("algorithm_id must be positive")
+        return value
+
+    @field_validator("code_text")
+    @classmethod
+    def validate_code_text(cls, value: str) -> str:
+        """Ensure code text is not empty."""
+        if not value.strip():
+            raise ValueError("code_text cannot be empty")
+        return value
+
+
+class AlgorithmTrainingAttemptOut(BaseModel):
+    """Algorithm training attempt response."""
+
+    id: int
+    algorithm_id: int
+    code_text: str
+    gpt_check_json: dict | None = None
+    rating_1_to_5: int | None = None
+    created_at: datetime
+
+
 class AlgorithmGroupCreate(BaseModel):
     """Algorithm group creation payload."""
 
