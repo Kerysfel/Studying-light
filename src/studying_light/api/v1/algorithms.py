@@ -1,15 +1,19 @@
-"""Algorithm import endpoints."""
+"""Algorithm endpoints."""
 
 import logging
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from studying_light.api.v1.schemas import (
+    AlgorithmCodeSnippetOut,
+    AlgorithmDetailOut,
     AlgorithmImportPayload,
     AlgorithmImportResponse,
+    AlgorithmListOut,
+    ReadingPartOut,
 )
 from studying_light.db.models.algorithm import Algorithm
 from studying_light.db.models.algorithm_code_snippet import AlgorithmCodeSnippet
@@ -18,6 +22,7 @@ from studying_light.db.models.algorithm_group import (
     normalize_group_title,
 )
 from studying_light.db.models.algorithm_review_item import AlgorithmReviewItem
+from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.session import get_session
 
 logger = logging.getLogger(__name__)
@@ -78,6 +83,121 @@ def _get_questions_for_interval(
         return None
     normalized = [str(item).strip() for item in questions if str(item).strip()]
     return normalized or None
+
+
+@router.get("/algorithms")
+def list_algorithms(
+    group_id: int,
+    session: Session = Depends(get_session),
+) -> list[AlgorithmListOut]:
+    """List algorithms for a group."""
+    group = session.get(AlgorithmGroup, group_id)
+    if not group:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Algorithm group not found", "code": "NOT_FOUND"},
+        )
+
+    counts_subquery = (
+        select(
+            AlgorithmReviewItem.algorithm_id,
+            func.count(AlgorithmReviewItem.id).label("review_items_count"),
+        )
+        .group_by(AlgorithmReviewItem.algorithm_id)
+        .subquery()
+    )
+    rows = session.execute(
+        select(
+            Algorithm,
+            func.coalesce(counts_subquery.c.review_items_count, 0),
+        )
+        .outerjoin(counts_subquery, counts_subquery.c.algorithm_id == Algorithm.id)
+        .where(Algorithm.group_id == group_id)
+        .order_by(Algorithm.id)
+    ).all()
+
+    return [
+        AlgorithmListOut(
+            id=algorithm.id,
+            group_id=group.id,
+            group_title=group.title,
+            title=algorithm.title,
+            summary=algorithm.summary,
+            complexity=algorithm.complexity,
+            review_items_count=int(review_items_count or 0),
+        )
+        for algorithm, review_items_count in rows
+    ]
+
+
+@router.get("/algorithms/{algorithm_id}")
+def get_algorithm_detail(
+    algorithm_id: int,
+    session: Session = Depends(get_session),
+) -> AlgorithmDetailOut:
+    """Get algorithm detail with code snippets and source part."""
+    row = session.execute(
+        select(Algorithm, AlgorithmGroup)
+        .join(AlgorithmGroup, Algorithm.group_id == AlgorithmGroup.id)
+        .where(Algorithm.id == algorithm_id)
+        .limit(1)
+    ).first()
+
+    if not row:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "Algorithm not found", "code": "NOT_FOUND"},
+        )
+
+    algorithm, group = row
+    code_snippets = (
+        session.execute(
+            select(AlgorithmCodeSnippet)
+            .where(AlgorithmCodeSnippet.algorithm_id == algorithm.id)
+            .order_by(AlgorithmCodeSnippet.id)
+        )
+        .scalars()
+        .all()
+    )
+    source_part = (
+        session.get(ReadingPart, algorithm.source_part_id)
+        if algorithm.source_part_id
+        else None
+    )
+    source_part_out = (
+        ReadingPartOut.model_validate(source_part) if source_part else None
+    )
+    review_items_count = session.execute(
+        select(func.count(AlgorithmReviewItem.id)).where(
+            AlgorithmReviewItem.algorithm_id == algorithm.id
+        )
+    ).scalar_one()
+
+    return AlgorithmDetailOut(
+        id=algorithm.id,
+        group_id=group.id,
+        group_title=group.title,
+        title=algorithm.title,
+        summary=algorithm.summary,
+        when_to_use=algorithm.when_to_use,
+        complexity=algorithm.complexity,
+        invariants=algorithm.invariants,
+        steps=algorithm.steps,
+        corner_cases=algorithm.corner_cases,
+        source_part=source_part_out,
+        code_snippets=[
+            AlgorithmCodeSnippetOut(
+                id=snippet.id,
+                code_kind=snippet.code_kind,
+                language=snippet.language,
+                code_text=snippet.code_text,
+                is_reference=snippet.is_reference,
+                created_at=snippet.created_at,
+            )
+            for snippet in code_snippets
+        ],
+        review_items_count=int(review_items_count or 0),
+    )
 
 
 @router.post("/algorithms/import", status_code=status.HTTP_201_CREATED)

@@ -324,6 +324,113 @@ class AlgorithmImportResponse(BaseModel):
     review_items_created: int
 
 
+class AlgorithmGroupCreate(BaseModel):
+    """Algorithm group creation payload."""
+
+    title: str
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """Ensure group title is not empty."""
+        value = value.strip()
+        if not value:
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmGroupUpdate(BaseModel):
+    """Algorithm group update payload."""
+
+    title: str | None = None
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str | None) -> str | None:
+        """Ensure group title is not empty when provided."""
+        if value is None:
+            raise ValueError("group title cannot be empty")
+        value = value.strip()
+        if not value:
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmGroupListOut(BaseModel):
+    """Algorithm group list response."""
+
+    id: int
+    title: str
+    description: str | None = None
+    notes: str | None = None
+    algorithms_count: int
+
+
+class AlgorithmGroupAlgorithmOut(BaseModel):
+    """Algorithm summary for group detail response."""
+
+    id: int
+    title: str
+    summary: str
+    complexity: str
+
+
+class AlgorithmGroupDetailOut(BaseModel):
+    """Algorithm group detail response."""
+
+    id: int
+    title: str
+    description: str | None = None
+    notes: str | None = None
+    algorithms_count: int
+    algorithms: list[AlgorithmGroupAlgorithmOut]
+
+
+class AlgorithmCodeSnippetOut(BaseModel):
+    """Algorithm code snippet response."""
+
+    id: int
+    code_kind: str
+    language: str
+    code_text: str
+    is_reference: bool
+    created_at: datetime
+
+
+class AlgorithmListOut(BaseModel):
+    """Algorithm list response."""
+
+    id: int
+    group_id: int
+    group_title: str
+    title: str
+    summary: str
+    complexity: str
+    review_items_count: int
+
+
+class AlgorithmDetailOut(BaseModel):
+    """Algorithm detail response."""
+
+    id: int
+    group_id: int
+    group_title: str
+    title: str
+    summary: str
+    when_to_use: str
+    complexity: str
+    invariants: list[str]
+    steps: list[str]
+    corner_cases: list[str]
+    source_part: ReadingPartOut | None = None
+    code_snippets: list[AlgorithmCodeSnippetOut]
+    review_items_count: int
+
+
 class AlgorithmReviewItemOut(BaseModel):
     """Algorithm review item response."""
 
