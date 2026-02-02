@@ -316,11 +316,18 @@ class AlgorithmImportPayload(BaseModel):
         return value
 
 
+class AlgorithmImportResult(BaseModel):
+    """Algorithm import creation result."""
+
+    algorithm_id: int
+    group_id: int
+
+
 class AlgorithmImportResponse(BaseModel):
     """Algorithm import response."""
 
     groups_created: int
-    algorithms_created: int
+    algorithms_created: list[AlgorithmImportResult]
     review_items_created: int
 
 
@@ -353,7 +360,7 @@ class AlgorithmGroupUpdate(BaseModel):
     def validate_title(cls, value: str | None) -> str | None:
         """Ensure group title is not empty when provided."""
         if value is None:
-            raise ValueError("group title cannot be empty")
+            return value
         value = value.strip()
         if not value:
             raise ValueError("group title cannot be empty")

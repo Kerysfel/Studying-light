@@ -1,11 +1,16 @@
-"""Tests for algorithm group normalization during import."""
+"""Tests for algorithm group handling during import."""
 
 from sqlalchemy import func, select
 
 from studying_light.db.models.algorithm_group import AlgorithmGroup
 
 
-def _build_payload(group_title: str, algorithm_title: str) -> dict:
+def _build_payload(
+    *,
+    algorithm_title: str,
+    group_id: int | None = None,
+    group_title_new: str | None = None,
+) -> dict:
     return {
         "groups": [],
         "algorithms": [
@@ -29,20 +34,43 @@ def _build_payload(group_title: str, algorithm_title: str) -> dict:
                     "language": "text",
                     "code_text": "code",
                 },
-                "group_title": group_title,
+                "group_id": group_id,
+                "group_title_new": group_title_new,
             }
         ],
     }
 
 
-def test_import_reuses_algorithm_group(client, session) -> None:
-    first_payload = _build_payload("  Graphs  ", "BFS")
-    first_response = client.post("/algorithms/import", json=first_payload)
+def test_import_with_existing_group_id(client) -> None:
+    group_response = client.post(
+        "/api/v1/algorithm-groups",
+        json={"title": "Graphs"},
+    )
+    assert group_response.status_code == 201
+    group_id = group_response.json()["id"]
+
+    payload = _build_payload(algorithm_title="BFS", group_id=group_id)
+    response = client.post("/api/v1/algorithms/import", json=payload)
+    assert response.status_code == 201
+    response_payload = response.json()
+    assert response_payload["groups_created"] == 0
+    assert response_payload["algorithms_created"][0]["group_id"] == group_id
+
+
+def test_import_with_new_title_reuses_group(client, session) -> None:
+    first_payload = _build_payload(
+        algorithm_title="BFS",
+        group_title_new="  Graphs  ",
+    )
+    first_response = client.post("/api/v1/algorithms/import", json=first_payload)
     assert first_response.status_code == 201
     assert first_response.json()["groups_created"] == 1
 
-    second_payload = _build_payload("graphs", "DFS")
-    second_response = client.post("/algorithms/import", json=second_payload)
+    second_payload = _build_payload(
+        algorithm_title="DFS",
+        group_title_new="graphs",
+    )
+    second_response = client.post("/api/v1/algorithms/import", json=second_payload)
     assert second_response.status_code == 201
     assert second_response.json()["groups_created"] == 0
 

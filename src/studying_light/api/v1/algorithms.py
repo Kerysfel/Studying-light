@@ -12,9 +12,11 @@ from studying_light.api.v1.schemas import (
     AlgorithmDetailOut,
     AlgorithmImportPayload,
     AlgorithmImportResponse,
+    AlgorithmImportResult,
     AlgorithmListOut,
     ReadingPartOut,
 )
+from studying_light.api.v1.structures import AlgorithmGroupPayload
 from studying_light.db.models.algorithm import Algorithm
 from studying_light.db.models.algorithm_code_snippet import AlgorithmCodeSnippet
 from studying_light.db.models.algorithm_group import (
@@ -206,19 +208,15 @@ def import_algorithms(
     session: Session = Depends(get_session),
 ) -> AlgorithmImportResponse:
     """Import algorithms, groups, and schedule review items."""
-    required_titles: list[str] = []
-    for item in payload.algorithms:
-        group_title = (item.group_title or "").strip()
-        if not group_title:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "detail": "group_title is required for each algorithm",
-                    "code": "ALGORITHM_IMPORT_INVALID",
-                },
-            )
-        required_titles.append(group_title)
+    group_payload_by_norm: dict[str, AlgorithmGroupPayload] = {}
+    for group in payload.groups:
+        title = group.title.strip()
+        if title:
+            group_payload_by_norm[normalize_group_title(title)] = group
 
+    group_cache_by_norm: dict[str, AlgorithmGroup] = {}
+    group_cache_by_id: dict[int, AlgorithmGroup] = {}
+    for item in payload.algorithms:
         questions_map = item.review_questions_by_interval.root
         for interval_value in DEFAULT_INTERVALS:
             questions = _get_questions_for_interval(questions_map, interval_value)
@@ -230,56 +228,46 @@ def import_algorithms(
                             "review_questions_by_interval must include non-empty "
                             f"questions for interval {interval_value}"
                         ),
-                        "code": "ALGORITHM_IMPORT_INVALID",
-                    },
-                )
-
-    for group in payload.groups:
-        title = group.title.strip()
-        if title and title not in required_titles:
-            required_titles.append(title)
-
-    normalized_titles = {normalize_group_title(title) for title in required_titles}
-    existing_groups = (
-        session.execute(
-            select(AlgorithmGroup).where(
-                AlgorithmGroup.title_norm.in_(normalized_titles)
-            )
-        )
-        .scalars()
-        .all()
-    )
-    groups_by_norm: dict[str, AlgorithmGroup] = {
-        group.title_norm: group for group in existing_groups
-    }
+                            "code": "ALGORITHM_IMPORT_INVALID",
+                        },
+                    )
 
     groups_created = 0
-    for group_payload in payload.groups:
-        title = group_payload.title.strip()
-        if not title:
-            continue
-        _, created = get_or_create_group(
-            session,
-            title,
-            description=group_payload.description,
-            notes=group_payload.notes,
-            cache=groups_by_norm,
-        )
-        if created:
-            groups_created += 1
-
-    for title in required_titles:
-        _, created = get_or_create_group(session, title, cache=groups_by_norm)
-        if created:
-            groups_created += 1
-
     algorithms_created = 0
+    algorithms_created_items: list[AlgorithmImportResult] = []
     review_items_created = 0
     base_date = date.today()
 
     for item in payload.algorithms:
-        group_title = item.group_title.strip()
-        group = groups_by_norm[normalize_group_title(group_title)]
+        group: AlgorithmGroup
+        if item.group_id is not None:
+            group = group_cache_by_id.get(item.group_id)
+            if group is None:
+                group = session.get(AlgorithmGroup, item.group_id)
+                if not group:
+                    raise HTTPException(
+                        status_code=404,
+                        detail={
+                            "detail": "Algorithm group not found",
+                            "code": "NOT_FOUND",
+                        },
+                    )
+                group_cache_by_id[item.group_id] = group
+        else:
+            group_title_new = item.group_title_new or ""
+            normalized = normalize_group_title(group_title_new)
+            group = group_cache_by_norm.get(normalized)
+            if group is None:
+                group_payload = group_payload_by_norm.get(normalized)
+                group, created = get_or_create_group(
+                    session,
+                    group_title_new,
+                    description=group_payload.description if group_payload else None,
+                    notes=group_payload.notes if group_payload else None,
+                    cache=group_cache_by_norm,
+                )
+                if created:
+                    groups_created += 1
         algorithm = Algorithm(
             group_id=group.id,
             source_part_id=item.source_part_id,
@@ -294,6 +282,12 @@ def import_algorithms(
         session.add(algorithm)
         session.flush()
         algorithms_created += 1
+        algorithms_created_items.append(
+            AlgorithmImportResult(
+                algorithm_id=algorithm.id,
+                group_id=group.id,
+            )
+        )
 
         snippet = AlgorithmCodeSnippet(
             algorithm_id=algorithm.id,
@@ -330,6 +324,6 @@ def import_algorithms(
 
     return AlgorithmImportResponse(
         groups_created=groups_created,
-        algorithms_created=algorithms_created,
+        algorithms_created=algorithms_created_items,
         review_items_created=review_items_created,
     )

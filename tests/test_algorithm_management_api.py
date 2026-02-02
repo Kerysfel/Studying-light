@@ -24,7 +24,7 @@ def _create_book_and_part(client: TestClient) -> int:
 def _import_algorithm(
     client: TestClient,
     *,
-    group_title: str,
+    group_id: int,
     algorithm_title: str,
     source_part_id: int,
 ) -> None:
@@ -51,7 +51,7 @@ def _import_algorithm(
                     "language": "text",
                     "code_text": "code",
                 },
-                "group_title": group_title,
+                "group_id": group_id,
                 "source_part_id": source_part_id,
             }
         ],
@@ -78,7 +78,7 @@ def test_algorithm_group_list_and_detail(
     part_id = _create_book_and_part(client)
     _import_algorithm(
         client,
-        group_title="Graphs",
+        group_id=group_id,
         algorithm_title="BFS",
         source_part_id=part_id,
     )
@@ -119,7 +119,7 @@ def test_algorithm_list_and_detail(
     part_id = _create_book_and_part(client)
     _import_algorithm(
         client,
-        group_title="Trees",
+        group_id=group_id,
         algorithm_title="DFS",
         source_part_id=part_id,
     )
