@@ -39,8 +39,17 @@ def test_part_import_creates_reviews_and_today(
     part.created_at = datetime.combine(base_date, datetime.min.time())
     session.commit()
 
+    markdown_summary = (
+        "## Сводка\n\n"
+        "### Ключевые идеи\n"
+        "- Идея 1\n"
+        "- Идея 2\n\n"
+        "### Термины/инварианты\n"
+        "- Термин 1\n"
+        "- Термин 2\n"
+    )
     import_payload = {
-        "gpt_summary": "Summary text",
+        "gpt_summary": markdown_summary,
         "gpt_questions_by_interval": {
             "1": ["Q1"],
             "7": ["Q2"],
@@ -54,7 +63,9 @@ def test_part_import_creates_reviews_and_today(
         json=import_payload,
     )
     assert import_response.status_code == 200
-    review_items = import_response.json()["review_items"]
+    response_payload = import_response.json()
+    assert response_payload["reading_part"]["gpt_summary"] == markdown_summary
+    review_items = response_payload["review_items"]
     assert len(review_items) == 5
 
     expected_due = {
@@ -78,6 +89,9 @@ def test_part_import_creates_reviews_and_today(
         .scalars()
         .all()
     )
+    stored_part = session.get(ReadingPart, part_id)
+    assert stored_part is not None
+    assert stored_part.gpt_summary == markdown_summary
     questions_by_interval = {
         item.interval_days: item.questions for item in stored_items
     }

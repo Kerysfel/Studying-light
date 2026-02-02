@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { getErrorMessage, request, requestText } from "../api.js";
 import { formatDueDate } from "../date.js";
+import Markdown from "../components/Markdown.jsx";
 
 const Reviews = () => {
   const [items, setItems] = useState([]);
@@ -22,6 +23,7 @@ const Reviews = () => {
   const [showNotes, setShowNotes] = useState(false);
   const [showGptFeedback, setShowGptFeedback] = useState(false);
   const [focusMode, setFocusMode] = useState(false);
+  const [reviewFilter, setReviewFilter] = useState("all");
 
   const [stats, setStats] = useState([]);
   const [statsLoading, setStatsLoading] = useState(false);
@@ -47,6 +49,7 @@ const Reviews = () => {
   const [algorithmPromptTemplate, setAlgorithmPromptTemplate] = useState("");
   const [algorithmShowPrompt, setAlgorithmShowPrompt] = useState(false);
   const [algorithmCopied, setAlgorithmCopied] = useState(false);
+  const [algorithmFilter, setAlgorithmFilter] = useState("all");
 
   const [algorithmStats, setAlgorithmStats] = useState([]);
   const [algorithmStatsLoading, setAlgorithmStatsLoading] = useState(false);
@@ -183,6 +186,45 @@ const Reviews = () => {
     return words.join(" ") + (words.length === 10 ? "..." : "");
   };
 
+  const ratingToVerdict = (rating) => {
+    if (rating == null) {
+      return null;
+    }
+    if (rating >= 4) {
+      return "PASS";
+    }
+    if (rating === 3) {
+      return "PARTIAL";
+    }
+    return "FAIL";
+  };
+
+  const filterByRating = (list, filter) => {
+    if (filter === "with") {
+      return list.filter((item) => item.gpt_rating_1_to_5 != null);
+    }
+    if (filter === "without") {
+      return list.filter((item) => item.gpt_rating_1_to_5 == null);
+    }
+    return list;
+  };
+
+  const filteredItems = useMemo(
+    () => filterByRating(items, reviewFilter),
+    [items, reviewFilter]
+  );
+
+  const filteredAlgorithmItems = useMemo(
+    () => filterByRating(algorithmItems, algorithmFilter),
+    [algorithmItems, algorithmFilter]
+  );
+
+  const reviewVerdict =
+    gptOverall?.verdict || ratingToVerdict(gptOverall?.rating_1_to_5);
+  const algorithmVerdict = ratingToVerdict(
+    algorithmOverall?.rating_1_to_5
+  );
+
   const openSchedule = async (part) => {
     setSchedulePart(part);
     setScheduleItems([]);
@@ -274,6 +316,7 @@ const Reviews = () => {
       setDetail(data);
       setSelectedId(reviewId);
       setFeedback("");
+      setShowGptFeedback(Boolean(data.gpt_feedback));
       const nextAnswers = {};
       data.questions.forEach((question, index) => {
         nextAnswers[index] = "";
@@ -296,6 +339,7 @@ const Reviews = () => {
     try {
       const data = await request(`/algorithm-reviews/${reviewId}`);
       setAlgorithmDetail(data);
+      setAlgorithmShowGptFeedback(Boolean(data.gpt_feedback));
       const nextAnswers = {};
       data.questions.forEach((question, index) => {
         nextAnswers[index] = "";
@@ -658,9 +702,41 @@ const Reviews = () => {
         {!loading && items.length === 0 && (
           <div className="empty-state">Пока нет запланированных повторений.</div>
         )}
+        {!loading && items.length > 0 && (
+          <div className="tabs">
+            <button
+              className={`tab-button${reviewFilter === "all" ? " active" : ""}`}
+              type="button"
+              onClick={() => setReviewFilter("all")}
+            >
+              Все
+            </button>
+            <button
+              className={`tab-button${reviewFilter === "with" ? " active" : ""}`}
+              type="button"
+              onClick={() => setReviewFilter("with")}
+            >
+              С проверкой
+            </button>
+            <button
+              className={`tab-button${reviewFilter === "without" ? " active" : ""}`}
+              type="button"
+              onClick={() => setReviewFilter("without")}
+            >
+              Без проверки
+            </button>
+          </div>
+        )}
+        {!loading && items.length > 0 && filteredItems.length === 0 && (
+          <div className="empty-state">Нет повторений по выбранному фильтру.</div>
+        )}
         <div className="list">
-          {items.map((item) => {
+          {filteredItems.map((item) => {
             const isActive = selectedId === item.id && detail;
+            const ratingLabel =
+              item.gpt_rating_1_to_5 != null
+                ? `★ ${item.gpt_rating_1_to_5}`
+                : null;
             return (
             <div
               key={item.id}
@@ -675,13 +751,16 @@ const Reviews = () => {
                   Дата: {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
                 </div>
               </div>
-              <button
-                className="primary-button"
-                type="button"
-                onClick={() => handleStartReview(item.id)}
-              >
-                {isActive ? "Продолжить" : "Начать повторение"}
-              </button>
+              <div className="list-actions">
+                {ratingLabel && <span className="pill">{ratingLabel}</span>}
+                <button
+                  className="primary-button"
+                  type="button"
+                  onClick={() => handleStartReview(item.id)}
+                >
+                  {isActive ? "Продолжить" : "Начать повторение"}
+                </button>
+              </div>
             </div>
           );
         })}
@@ -715,7 +794,11 @@ const Reviews = () => {
             <div className="summary-card">
               <div className="summary-title">Сводка</div>
               <div className="summary-text">
-                {detail.summary || "Сводка не найдена."}
+                {detail.summary ? (
+                  <Markdown content={detail.summary} />
+                ) : (
+                  "Сводка не найдена."
+                )}
               </div>
             </div>
 
@@ -842,7 +925,8 @@ const Reviews = () => {
                 </div>
                 <div className="summary-text">
                   Оценка: {gptOverall.rating_1_to_5}/5 ·{" "}
-                  {gptOverall.score_0_to_100} · {gptOverall.verdict}
+                  {gptOverall.score_0_to_100}
+                  {reviewVerdict ? ` · ${reviewVerdict}` : ""}
                 </div>
                 {showGptFeedback && (
                   <>
@@ -860,7 +944,7 @@ const Reviews = () => {
                         )}
                       </div>
                       <div>
-                        <div className="summary-title">Следующие шаги</div>
+                        <div className="summary-title">Рекомендации</div>
                         {gptOverall.next_steps.length > 0 ? (
                           <ul className="summary-list">
                             {gptOverall.next_steps.map((item, index) => (
@@ -962,8 +1046,45 @@ const Reviews = () => {
               Пока нет алгоритмических повторений.
             </div>
           )}
+          {!algorithmLoading && algorithmItems.length > 0 && (
+            <div className="tabs">
+              <button
+                className={`tab-button${algorithmFilter === "all" ? " active" : ""}`}
+                type="button"
+                onClick={() => setAlgorithmFilter("all")}
+              >
+                Все
+              </button>
+              <button
+                className={`tab-button${algorithmFilter === "with" ? " active" : ""}`}
+                type="button"
+                onClick={() => setAlgorithmFilter("with")}
+              >
+                С проверкой
+              </button>
+              <button
+                className={`tab-button${algorithmFilter === "without" ? " active" : ""}`}
+                type="button"
+                onClick={() => setAlgorithmFilter("without")}
+              >
+                Без проверки
+              </button>
+            </div>
+          )}
+          {!algorithmLoading &&
+            algorithmItems.length > 0 &&
+            filteredAlgorithmItems.length === 0 && (
+              <div className="empty-state">
+                Нет алгоритмов по выбранному фильтру.
+              </div>
+            )}
           <div className="list">
-            {algorithmItems.map((item) => (
+            {filteredAlgorithmItems.map((item) => {
+              const ratingLabel =
+                item.gpt_rating_1_to_5 != null
+                  ? `★ ${item.gpt_rating_1_to_5}`
+                  : null;
+              return (
               <div key={item.id} className="list-row algorithm-list-item">
                 <div>
                   <div className="list-title">{item.title}</div>
@@ -973,15 +1094,19 @@ const Reviews = () => {
                     {formatDueDate(item.due_date, { todayLabel: "Сегодня" })}
                   </div>
                 </div>
-                <button
-                  className="primary-button"
-                  type="button"
-                  onClick={() => handleStartAlgorithmReview(item.id)}
-                >
-                  Начать повторение
-                </button>
+                <div className="list-actions">
+                  {ratingLabel && <span className="pill">{ratingLabel}</span>}
+                  <button
+                    className="primary-button"
+                    type="button"
+                    onClick={() => handleStartAlgorithmReview(item.id)}
+                  >
+                    Начать повторение
+                  </button>
+                </div>
               </div>
-            ))}
+            );
+            })}
           </div>
         </section>
       )}
@@ -1189,7 +1314,11 @@ const Reviews = () => {
                 <div className="summary-card">
                   <div className="summary-title">Кратко</div>
                   <div className="summary-text">
-                    {algorithmDetail.summary || "Сводка не найдена."}
+                    {algorithmDetail.summary ? (
+                      <Markdown content={algorithmDetail.summary} />
+                    ) : (
+                      "Сводка не найдена."
+                    )}
                   </div>
                 </div>
                 <div className="summary-card">
@@ -1299,9 +1428,8 @@ const Reviews = () => {
                     </button>
                   </div>
                   <div className="summary-text">
-                    Оценка: {algorithmOverall.rating_1_to_5}/5 ·{" "}
-                    {algorithmOverall.score_0_to_100} ·{" "}
-                    {algorithmOverall.verdict}
+                    Оценка: {algorithmOverall.rating_1_to_5}/5
+                    {algorithmVerdict ? ` · ${algorithmVerdict}` : ""}
                   </div>
                   {algorithmShowGptFeedback && (
                     <>
@@ -1319,7 +1447,7 @@ const Reviews = () => {
                           )}
                         </div>
                         <div>
-                          <div className="summary-title">Следующие шаги</div>
+                          <div className="summary-title">Рекомендации</div>
                           {algorithmOverall.next_steps.length > 0 ? (
                             <ul className="summary-list">
                               {algorithmOverall.next_steps.map((item, index) => (

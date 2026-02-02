@@ -2,7 +2,7 @@
 
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from studying_light.api.v1.structures import (
     AlgorithmGptReviewResult,
@@ -175,6 +175,7 @@ class ReviewItemOut(BaseModel):
     book_title: str
     part_index: int
     label: str | None = None
+    gpt_rating_1_to_5: int | None = None
 
 
 class ReviewDetailOut(BaseModel):
@@ -224,6 +225,22 @@ class ReviewPartStatsOut(BaseModel):
     completed_reviews: int
     gpt_attempts_total: int
     gpt_average_rating: float | None = None
+
+
+class ReviewStatsSummaryOut(BaseModel):
+    """Summary review stats for a time window."""
+
+    average_rating_7d: float | None = None
+    average_rating_30d: float | None = None
+    planned_count: int
+    completed_count: int
+
+
+class StatsOverviewOut(BaseModel):
+    """Overview stats for theory and algorithm reviews."""
+
+    theory: ReviewStatsSummaryOut
+    algorithms: ReviewStatsSummaryOut
 
 
 class BookProgressOut(BaseModel):
@@ -316,12 +333,217 @@ class AlgorithmImportPayload(BaseModel):
         return value
 
 
+class AlgorithmImportResult(BaseModel):
+    """Algorithm import creation result."""
+
+    algorithm_id: int
+    group_id: int
+
+
 class AlgorithmImportResponse(BaseModel):
     """Algorithm import response."""
 
     groups_created: int
-    algorithms_created: int
+    algorithms_created: list[AlgorithmImportResult]
     review_items_created: int
+
+
+class AlgorithmTrainingCreate(BaseModel):
+    """Algorithm training attempt payload."""
+
+    algorithm_id: int
+    mode: str = "memory"
+    code_text: str
+    accuracy: float | None = None
+    duration_sec: int | None = None
+    gpt_check_result: AlgorithmGptReviewResult | None = None
+
+    @field_validator("algorithm_id")
+    @classmethod
+    def validate_algorithm_id(cls, value: int) -> int:
+        """Ensure algorithm_id is positive."""
+        if value <= 0:
+            raise ValueError("algorithm_id must be positive")
+        return value
+
+    @field_validator("code_text")
+    @classmethod
+    def validate_code_text(cls, value: str) -> str:
+        """Ensure code text is not empty."""
+        if not value.strip():
+            raise ValueError("code_text cannot be empty")
+        return value
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        """Ensure mode is supported."""
+        if value not in {"memory", "typing"}:
+            raise ValueError("mode must be memory or typing")
+        return value
+
+    @field_validator("accuracy")
+    @classmethod
+    def validate_accuracy(cls, value: float | None) -> float | None:
+        """Ensure accuracy is within 0..100 when provided."""
+        if value is None:
+            return value
+        if value < 0 or value > 100:
+            raise ValueError("accuracy must be between 0 and 100")
+        return value
+
+    @field_validator("duration_sec")
+    @classmethod
+    def validate_duration(cls, value: int | None) -> int | None:
+        """Ensure duration is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("duration_sec must be positive")
+        return value
+
+    @model_validator(mode="after")
+    def validate_mode_requirements(self) -> "AlgorithmTrainingCreate":
+        """Ensure mode-specific fields are provided."""
+        if self.mode == "typing":
+            if self.accuracy is None or self.duration_sec is None:
+                raise ValueError("accuracy and duration_sec are required for typing")
+        return self
+
+
+class AlgorithmTrainingAttemptOut(BaseModel):
+    """Algorithm training attempt response."""
+
+    id: int
+    algorithm_id: int
+    mode: str
+    code_text: str
+    gpt_check_json: dict | None = None
+    rating_1_to_5: int | None = None
+    accuracy: float | None = None
+    duration_sec: int | None = None
+    created_at: datetime
+
+
+class AlgorithmGroupCreate(BaseModel):
+    """Algorithm group creation payload."""
+
+    title: str
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str) -> str:
+        """Ensure group title is not empty."""
+        value = value.strip()
+        if not value:
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmGroupUpdate(BaseModel):
+    """Algorithm group update payload."""
+
+    title: str | None = None
+    description: str | None = None
+    notes: str | None = None
+
+    @field_validator("title")
+    @classmethod
+    def validate_title(cls, value: str | None) -> str | None:
+        """Ensure group title is not empty when provided."""
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("group title cannot be empty")
+        return value
+
+
+class AlgorithmGroupListOut(BaseModel):
+    """Algorithm group list response."""
+
+    id: int
+    title: str
+    description: str | None = None
+    notes: str | None = None
+    algorithms_count: int
+
+
+class AlgorithmGroupAlgorithmOut(BaseModel):
+    """Algorithm summary for group detail response."""
+
+    id: int
+    title: str
+    summary: str
+    complexity: str
+
+
+class AlgorithmGroupDetailOut(BaseModel):
+    """Algorithm group detail response."""
+
+    id: int
+    title: str
+    description: str | None = None
+    notes: str | None = None
+    algorithms_count: int
+    algorithms: list[AlgorithmGroupAlgorithmOut]
+
+
+class AlgorithmGroupMergePayload(BaseModel):
+    """Algorithm group merge payload."""
+
+    target_group_id: int
+
+    @field_validator("target_group_id")
+    @classmethod
+    def validate_target_group_id(cls, value: int) -> int:
+        """Ensure target group id is positive."""
+        if value <= 0:
+            raise ValueError("target_group_id must be positive")
+        return value
+
+
+class AlgorithmCodeSnippetOut(BaseModel):
+    """Algorithm code snippet response."""
+
+    id: int
+    code_kind: str
+    language: str
+    code_text: str
+    is_reference: bool
+    created_at: datetime
+
+
+class AlgorithmListOut(BaseModel):
+    """Algorithm list response."""
+
+    id: int
+    group_id: int
+    group_title: str
+    title: str
+    summary: str
+    complexity: str
+    review_items_count: int
+
+
+class AlgorithmDetailOut(BaseModel):
+    """Algorithm detail response."""
+
+    id: int
+    group_id: int
+    group_title: str
+    title: str
+    summary: str
+    when_to_use: str
+    complexity: str
+    invariants: list[str]
+    steps: list[str]
+    corner_cases: list[str]
+    source_part: ReadingPartOut | None = None
+    code_snippets: list[AlgorithmCodeSnippetOut]
+    review_items_count: int
 
 
 class AlgorithmReviewItemOut(BaseModel):
@@ -335,6 +557,7 @@ class AlgorithmReviewItemOut(BaseModel):
     group_id: int
     group_title: str
     title: str
+    gpt_rating_1_to_5: int | None = None
 
 
 class AlgorithmReviewDetailOut(BaseModel):

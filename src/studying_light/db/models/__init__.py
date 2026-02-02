@@ -5,6 +5,7 @@ from studying_light.db.models.algorithm_code_snippet import AlgorithmCodeSnippet
 from studying_light.db.models.algorithm_group import AlgorithmGroup
 from studying_light.db.models.algorithm_review_attempt import AlgorithmReviewAttempt
 from studying_light.db.models.algorithm_review_item import AlgorithmReviewItem
+from studying_light.db.models.algorithm_training_attempt import AlgorithmTrainingAttempt
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_attempt import ReviewAttempt
@@ -17,6 +18,7 @@ __all__ = [
     "AlgorithmGroup",
     "AlgorithmReviewAttempt",
     "AlgorithmReviewItem",
+    "AlgorithmTrainingAttempt",
     "Book",
     "ReadingPart",
     "ReviewAttempt",

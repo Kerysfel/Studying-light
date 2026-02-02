@@ -50,3 +50,7 @@ class Algorithm(Base):
         back_populates="algorithm",
         cascade="all, delete-orphan",
     )
+    training_attempts: Mapped[list["AlgorithmTrainingAttempt"]] = relationship(
+        back_populates="algorithm",
+        cascade="all, delete-orphan",
+    )

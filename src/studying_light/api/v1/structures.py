@@ -2,7 +2,14 @@
 
 from datetime import date
 
-from pydantic import BaseModel, ConfigDict, Field, RootModel, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    RootModel,
+    field_validator,
+    model_validator,
+)
 
 
 class TermItem(BaseModel):
@@ -56,7 +63,8 @@ class AlgorithmGroupPayload(BaseModel):
     @classmethod
     def validate_title(cls, value: str) -> str:
         """Ensure group title is not empty."""
-        if not value.strip():
+        value = value.strip()
+        if not value:
             raise ValueError("group title cannot be empty")
         return value
 
@@ -74,7 +82,8 @@ class AlgorithmImportItem(BaseModel):
     review_questions_by_interval: AlgorithmReviewQuestionsByInterval
     code: AlgorithmCodePayload
     suggested_group: str | None = None
-    group_title: str | None = None
+    group_id: int | None = None
+    group_title_new: str | None = None
     source_part_id: int | None = None
 
     @field_validator("title", "summary", "when_to_use", "complexity")
@@ -84,6 +93,36 @@ class AlgorithmImportItem(BaseModel):
         if not value.strip():
             raise ValueError("value cannot be empty")
         return value
+
+    @field_validator("group_id")
+    @classmethod
+    def validate_group_id(cls, value: int | None) -> int | None:
+        """Ensure group_id is positive when provided."""
+        if value is None:
+            return value
+        if value <= 0:
+            raise ValueError("group_id must be positive")
+        return value
+
+    @field_validator("group_title_new")
+    @classmethod
+    def validate_group_title_new(cls, value: str | None) -> str | None:
+        """Ensure new group title is not empty when provided."""
+        if value is None:
+            return value
+        value = value.strip()
+        if not value:
+            raise ValueError("group_title_new cannot be empty")
+        return value
+
+    @model_validator(mode="after")
+    def validate_group_assignment(self) -> "AlgorithmImportItem":
+        """Ensure exactly one group selector is provided."""
+        if self.group_id is None and self.group_title_new is None:
+            raise ValueError("group_id or group_title_new is required")
+        if self.group_id is not None and self.group_title_new is not None:
+            raise ValueError("group_id and group_title_new cannot be used together")
+        return self
 
 
 class GptReviewMeta(BaseModel):
