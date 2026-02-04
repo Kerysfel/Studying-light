@@ -9,3 +9,23 @@ services:
       - "8000:8000"
     volumes:
       - ./data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: studying_light
+      POSTGRES_USER: studying_light
+      POSTGRES_PASSWORD: studying_light
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studying_light -d studying_light"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

@@ -65,6 +65,8 @@ Studying Light — легкий помощник для чтения и повт
 cp .env.example .env
 ```
 
+По умолчанию `.env.example` нацелен на Postgres. Чтобы остаться на SQLite,
+уберите `DATABASE_URL` (или оставьте пустым) и используйте `DB_PATH`.
 При необходимости отредактируйте `.env`, затем:
 
 ```bash
@@ -72,6 +74,7 @@ docker compose --env-file .env up --build
 ```
 
 Данные SQLite сохраняются в `./data` и не теряются при перезапусках.
+Данные Postgres сохраняются в volume `postgres_data`.
 
 Откройте `http://localhost:8000` (фронт и API).
 
@@ -86,6 +89,7 @@ uv run uvicorn studying_light.main:app --reload
 Откройте `http://localhost:8000`.
 
 По умолчанию данные лежат в `data/app.db`.
+Для Postgres задайте `DATABASE_URL` перед запуском.
 
 Необязательный dev-сервер фронтенда:
 
@@ -181,12 +185,9 @@ curl http://localhost:8000/api/v1/today
 | Переменная | По умолчанию       | Примечания                                                   |
 | ---------- | ------------------ | ------------------------------------------------------------ |
 | `APP_ENV`  | `local`            | Метка окружения.                                             |
+| `DATABASE_URL` | `postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light` | Строка подключения. Если не задана (или пустая), используется SQLite. |
 | `DB_PATH`  | `/data/app.db`     | Значение для Docker. Если локально не задано, то `data/app.db`. |
 | `TZ`       | `Europe/Amsterdam` | Часовой пояс контейнера.                                     |
-
-Необязательно:
-
-- `DATABASE_URL`: переопределяет `DB_PATH`, если задана.
 
 ## Статус проекта
 
