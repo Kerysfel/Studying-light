@@ -160,6 +160,27 @@ class UserOut(BaseModel):
     must_change_password: bool
 
 
+class AuthRegister(BaseModel):
+    """Auth registration payload."""
+
+    email: str
+    password: str
+
+
+class AuthLogin(BaseModel):
+    """Auth login payload."""
+
+    email: str
+    password: str
+
+
+class TokenResponse(BaseModel):
+    """Auth token response."""
+
+    access_token: str
+    token_type: str
+
+
 class ImportGptPayload(BaseModel):
     """GPT import payload."""
 
@@ -632,7 +653,7 @@ class SettingsOut(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
-    id: int
+    user_id: UUID
     timezone: str | None = None
     pomodoro_work_min: int | None = None
     pomodoro_break_min: int | None = None

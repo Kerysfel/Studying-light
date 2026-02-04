@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from studying_light.api.v1.auth import router as auth_router
 from studying_light.api.v1.algorithm_reviews import router as algorithm_reviews_router
 from studying_light.api.v1.algorithms import router as algorithms_router
 from studying_light.api.v1.algorithm_groups import router as algorithm_groups_router
@@ -16,6 +17,7 @@ from studying_light.api.v1.stats import router as stats_router
 
 router: APIRouter = APIRouter(prefix="/api/v1")
 
+router.include_router(auth_router, tags=["auth"])
 router.include_router(books_router, tags=["books"])
 router.include_router(parts_router, tags=["parts"])
 router.include_router(reviews_router, tags=["reviews"])

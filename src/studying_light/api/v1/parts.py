@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_optional_user
 from studying_light.api.v1.schemas import (
     ImportGptPayload,
     ImportGptResponse,
@@ -17,11 +18,13 @@ from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 from studying_light.db.models.user_settings import UserSettings
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
+from studying_light.services.user_settings import DEFAULT_SETTINGS
 
 router: APIRouter = APIRouter()
 
-DEFAULT_INTERVALS: list[int] = [1, 7, 16, 35, 90]
+DEFAULT_INTERVALS: list[int] = DEFAULT_SETTINGS["intervals_days"]
 
 
 def _compute_pages_read(
@@ -153,6 +156,7 @@ def import_gpt(
     part_id: int,
     payload: ImportGptPayload,
     session: Session = Depends(get_session),
+    current_user: User | None = Depends(get_optional_user),
 ) -> ImportGptResponse:
     """Import GPT summary and questions for a reading part."""
     part = session.get(ReadingPart, part_id)
@@ -178,7 +182,9 @@ def import_gpt(
     for item in existing_items:
         session.delete(item)
 
-    settings = session.get(UserSettings, 1)
+    settings = None
+    if current_user:
+        settings = session.get(UserSettings, current_user.id)
     intervals = settings.intervals_days if settings and settings.intervals_days else []
     if not intervals:
         intervals = DEFAULT_INTERVALS
