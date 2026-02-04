@@ -1,6 +1,7 @@
 """API schemas."""
 
 from datetime import date, datetime
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -135,6 +136,28 @@ class ReadingPartOut(BaseModel):
     pages_read: int | None = None
     session_seconds: int | None = None
     page_end: int | None = None
+
+
+class UserCreate(BaseModel):
+    """User creation payload."""
+
+    email: str
+    password: str
+
+
+class UserOut(BaseModel):
+    """User response."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: UUID
+    email: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    last_login_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    must_change_password: bool
 
 
 class ImportGptPayload(BaseModel):
