@@ -4,6 +4,7 @@ import os
 from logging.config import fileConfig
 from pathlib import Path
 
+import sqlalchemy as sa
 from sqlalchemy import MetaData, engine_from_config, pool
 
 from alembic import context
@@ -54,6 +55,16 @@ def run_migrations_offline() -> None:
         context.run_migrations()
 
 
+def _ensure_version_table(connection: sa.engine.Connection) -> None:
+    """Ensure the Alembic version table can store long revision IDs."""
+    version_table = sa.Table(
+        "alembic_version",
+        sa.MetaData(),
+        sa.Column("version_num", sa.String(64), primary_key=True),
+    )
+    version_table.create(connection, checkfirst=True)
+
+
 def run_migrations_online() -> None:
     """Run migrations with a database connection."""
     section = config.get_section(config.config_ini_section, {})
@@ -66,11 +77,11 @@ def run_migrations_online() -> None:
     )
 
     with connectable.connect() as connection:
+        _ensure_version_table(connection)
         context.configure(connection=connection, target_metadata=target_metadata)
 
         with context.begin_transaction():
             context.run_migrations()
-
 
 if context.is_offline_mode():
     run_migrations_offline()

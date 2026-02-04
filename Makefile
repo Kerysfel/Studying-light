@@ -1,4 +1,4 @@
-.PHONY: run test lint format alembic docker-up backup
+.PHONY: run test lint format alembic docker-up backup postgres-migrations
 
 run:
 	uv run uvicorn studying_light.main:app --reload
@@ -20,3 +20,8 @@ docker-up:
 
 backup:
 	uv run python -m studying_light.db.backup
+
+postgres-migrations:
+	docker compose --env-file .env up -d postgres
+	docker compose exec -T postgres env PGPASSWORD=studying_light psql -U studying_light -d postgres -c "DROP DATABASE IF EXISTS studying_light_test; CREATE DATABASE studying_light_test;"
+	docker compose run --rm --entrypoint uv -e DATABASE_URL=postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light_test app run alembic upgrade head

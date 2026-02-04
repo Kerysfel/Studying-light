@@ -12,6 +12,7 @@
 - If you change credentials in `DATABASE_URL`, update the Postgres service values in `docker-compose.yml` to match.
 - Start services: `docker compose --env-file .env up --build`.
 - Migrations run on container start (`uv run alembic upgrade head`).
+- To validate migrations on a clean database: `make postgres-migrations` (creates `studying_light_test`).
 
 ## Backups
 SQLite:
