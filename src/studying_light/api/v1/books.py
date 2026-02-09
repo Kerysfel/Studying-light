@@ -1,14 +1,18 @@
 """Book endpoints."""
 
+from uuid import UUID
+
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import BookCreate, BookStatsOut, BookUpdate
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_attempt import ReviewAttempt
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -16,6 +20,7 @@ router: APIRouter = APIRouter()
 
 def _collect_book_stats(
     session: Session,
+    user_id: UUID,
     book_ids: list[int],
 ) -> tuple[dict[int, int], dict[int, tuple[int, int, int]]]:
     """Collect aggregated reading stats for the given books."""
@@ -32,6 +37,7 @@ def _collect_book_stats(
             ),
         )
         .where(ReadingPart.book_id.in_(book_ids))
+        .where(ReadingPart.user_id == user_id)
         .group_by(ReadingPart.book_id)
     ).all()
     pages_by_book = {book_id: int(total or 0) for book_id, total in pages_rows}
@@ -44,6 +50,7 @@ def _collect_book_stats(
             func.coalesce(func.sum(ReadingPart.session_seconds), 0),
         )
         .where(ReadingPart.book_id.in_(book_ids))
+        .where(ReadingPart.user_id == user_id)
         .group_by(ReadingPart.book_id)
     ).all()
     stats_by_book: dict[int, tuple[int, int, int]] = {}
@@ -82,11 +89,26 @@ def _build_book_stats_out(
 
 
 @router.get("/books")
-def list_books(session: Session = Depends(get_session)) -> list[BookStatsOut]:
+def list_books(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[BookStatsOut]:
     """List all books."""
-    books = session.execute(select(Book).order_by(Book.id)).scalars().all()
+    books = (
+        session.execute(
+            select(Book)
+            .where(Book.user_id == current_user.id)
+            .order_by(Book.id)
+        )
+        .scalars()
+        .all()
+    )
     book_ids = [book.id for book in books]
-    pages_by_book, stats_by_book = _collect_book_stats(session, book_ids)
+    pages_by_book, stats_by_book = _collect_book_stats(
+        session,
+        current_user.id,
+        book_ids,
+    )
     return [_build_book_stats_out(book, pages_by_book, stats_by_book) for book in books]
 
 
@@ -94,9 +116,11 @@ def list_books(session: Session = Depends(get_session)) -> list[BookStatsOut]:
 def create_book(
     payload: BookCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> BookStatsOut:
     """Create a new book."""
     book = Book(
+        user_id=current_user.id,
         title=payload.title,
         author=payload.author,
         status="active",
@@ -105,7 +129,11 @@ def create_book(
     session.add(book)
     session.commit()
     session.refresh(book)
-    pages_by_book, stats_by_book = _collect_book_stats(session, [book.id])
+    pages_by_book, stats_by_book = _collect_book_stats(
+        session,
+        current_user.id,
+        [book.id],
+    )
     return _build_book_stats_out(book, pages_by_book, stats_by_book)
 
 
@@ -114,9 +142,12 @@ def update_book(
     book_id: int,
     payload: BookUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> BookStatsOut:
     """Update an existing book."""
-    book = session.get(Book, book_id)
+    book = session.execute(
+        select(Book).where(Book.id == book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -142,16 +173,24 @@ def update_book(
 
     session.commit()
     session.refresh(book)
-    pages_by_book, stats_by_book = _collect_book_stats(session, [book.id])
+    pages_by_book, stats_by_book = _collect_book_stats(
+        session,
+        current_user.id,
+        [book.id],
+    )
     return _build_book_stats_out(book, pages_by_book, stats_by_book)
 
 
 @router.delete("/books/{book_id}")
 def delete_book(
-    book_id: int, session: Session = Depends(get_session)
+    book_id: int,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> dict[str, str]:
     """Delete a book."""
-    book = session.get(Book, book_id)
+    book = session.execute(
+        select(Book).where(Book.id == book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -159,7 +198,12 @@ def delete_book(
         )
 
     part_ids = (
-        session.execute(select(ReadingPart.id).where(ReadingPart.book_id == book_id))
+        session.execute(
+            select(ReadingPart.id).where(
+                ReadingPart.book_id == book_id,
+                ReadingPart.user_id == current_user.id,
+            )
+        )
         .scalars()
         .all()
     )
@@ -167,7 +211,8 @@ def delete_book(
         review_item_ids = (
             session.execute(
                 select(ReviewScheduleItem.id).where(
-                    ReviewScheduleItem.reading_part_id.in_(part_ids)
+                    ReviewScheduleItem.reading_part_id.in_(part_ids),
+                    ReviewScheduleItem.user_id == current_user.id,
                 )
             )
             .scalars()
@@ -176,15 +221,22 @@ def delete_book(
         if review_item_ids:
             session.execute(
                 delete(ReviewAttempt).where(
-                    ReviewAttempt.review_item_id.in_(review_item_ids)
+                    ReviewAttempt.review_item_id.in_(review_item_ids),
+                    ReviewAttempt.user_id == current_user.id,
                 )
             )
             session.execute(
                 delete(ReviewScheduleItem).where(
-                    ReviewScheduleItem.id.in_(review_item_ids)
+                    ReviewScheduleItem.id.in_(review_item_ids),
+                    ReviewScheduleItem.user_id == current_user.id,
                 )
             )
-        session.execute(delete(ReadingPart).where(ReadingPart.id.in_(part_ids)))
+        session.execute(
+            delete(ReadingPart).where(
+                ReadingPart.id.in_(part_ids),
+                ReadingPart.user_id == current_user.id,
+            )
+        )
 
     session.delete(book)
     session.commit()

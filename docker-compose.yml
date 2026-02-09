@@ -3,12 +3,11 @@ services:
     build:
       context: .
       dockerfile: docker/DockerFile
-    env_file:
-      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      IN_DOCKER: "1"
     ports:
       - "8000:8000"
-    volumes:
-      - ./data:/data
     depends_on:
       postgres:
         condition: service_healthy
@@ -19,6 +18,8 @@ services:
       POSTGRES_DB: studying_light
       POSTGRES_USER: studying_light
       POSTGRES_PASSWORD: studying_light
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:

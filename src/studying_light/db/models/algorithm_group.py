@@ -1,8 +1,9 @@
 """Algorithm group model."""
 
+import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, String, Text, UniqueConstraint, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship, validates
 
 from studying_light.db.base import Base
@@ -17,9 +18,20 @@ class AlgorithmGroup(Base):
     """Algorithm group entity."""
 
     __tablename__ = "algorithm_groups"
-    __table_args__ = (UniqueConstraint("title_norm", name="uq_algorithm_groups_title_norm"),)
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "title_norm",
+            name="uq_algorithm_groups_user_id_title_norm",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+    )
     title: Mapped[str] = mapped_column(String(255))
     title_norm: Mapped[str] = mapped_column(Text, nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)

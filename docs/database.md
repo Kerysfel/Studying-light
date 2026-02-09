@@ -1,25 +1,36 @@
-# Database storage and backups
+# Database (Postgres)
 
-## Persistence
-- If `DATABASE_URL` is set, the app uses that database (Postgres is supported).
-- If `DATABASE_URL` is not set (or empty), the app falls back to SQLite via `DB_PATH`.
-- The SQLite file lives at `data/app.db` for local runs.
-- Docker uses `/data/app.db` and `docker-compose.yml` bind-mounts `./data` to `/data`, so rebuilds and container removal keep the database as long as `./data` remains.
-- Docker Postgres stores data in the `postgres_data` volume.
+## Storage
+- Docker uses PostgreSQL (`postgres:16-alpine`).
+- Persistent data is stored in the named Docker volume `postgres_data`.
+- Application container startup depends on a healthy Postgres container.
 
-## Postgres (Docker)
-- Keep `DATABASE_URL` from `.env.example`, or set your own credentials.
-- If you change credentials in `DATABASE_URL`, update the Postgres service values in `docker-compose.yml` to match.
-- Start services: `docker compose --env-file .env up --build`.
-- Migrations run on container start (`uv run alembic upgrade head`).
-- To validate migrations on a clean database: `make postgres-migrations` (creates `studying_light_test`).
+## Required configuration
+- `DATABASE_URL` is required in Docker runtime.
+- `docker-compose.yml` passes `IN_DOCKER=1`; if `DATABASE_URL` is missing, app startup fails with:
+  - `{ "detail": "DATABASE_URL is required when running in Docker", "code": "DATABASE_URL_REQUIRED" }`
 
-## Backups
-SQLite:
-- Run `make backup` or `uv run python -m studying_light.db.backup` to create a timestamped copy.
-- Backups go to `data/backups/` (or `/data/backups` in Docker).
-- Use `--output-dir` to override the backup directory.
-- Only file-based SQLite URLs are supported.
+## Run and migrate
+- Start stack: `cp .env.example .env && docker compose up --build`
+- Run migrations in app container:
+  - `docker compose run --rm --entrypoint uv -e DATABASE_URL=postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light app run alembic upgrade head`
 
-Postgres (Docker):
-- Example: `docker compose exec postgres pg_dump -U studying_light studying_light > data/backups/pg_dump.sql`
+## Migration smoke check (clean Postgres)
+- Use `make postgres-alembic-smoke`.
+- It validates:
+  - clean DB `alembic upgrade head`
+  - repeated `alembic upgrade head` (no-op)
+  - `alembic downgrade -1` and back to `upgrade head`
+
+## Backup and restore
+- Backup:
+  - `make pg-backup`
+  - Output: `data/backups/studying_light.sql`
+- Restore:
+  - `make pg-restore BACKUP_FILE=data/backups/studying_light.sql`
+
+## Manual pg_dump/pg_restore examples
+- Dump:
+  - `docker compose exec -T postgres pg_dump -U studying_light studying_light > data/backups/studying_light.sql`
+- Restore:
+  - `docker compose exec -T postgres psql -U studying_light -d studying_light < data/backups/studying_light.sql`

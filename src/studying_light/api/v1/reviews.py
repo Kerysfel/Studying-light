@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import case, func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     ReviewAttemptOut,
     ReviewCompletePayload,
@@ -22,6 +23,7 @@ from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_attempt import ReviewAttempt
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -67,11 +69,17 @@ def _build_review_item_out(
 
 
 @router.get("/reviews/today")
-def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut]:
+def reviews_today(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[ReviewItemOut]:
     """List planned review items, including overdue ones."""
     latest_rating = (
         select(ReviewAttempt.gpt_rating_1_to_5)
-        .where(ReviewAttempt.review_item_id == ReviewScheduleItem.id)
+        .where(
+            ReviewAttempt.review_item_id == ReviewScheduleItem.id,
+            ReviewAttempt.user_id == current_user.id,
+        )
         .order_by(ReviewAttempt.created_at.desc())
         .limit(1)
         .scalar_subquery()
@@ -82,6 +90,7 @@ def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut
         .join(Book, ReadingPart.book_id == Book.id)
         .where(
             ReviewScheduleItem.status == "planned",
+            ReviewScheduleItem.user_id == current_user.id,
         )
         .order_by(ReviewScheduleItem.due_date, ReviewScheduleItem.id)
     ).all()
@@ -96,6 +105,7 @@ def reviews_today(session: Session = Depends(get_session)) -> list[ReviewItemOut
 def review_schedule(
     reading_part_id: int | None = None,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[ReviewScheduleItemOut]:
     """List scheduled review items for a reading part."""
     if reading_part_id is None:
@@ -112,6 +122,7 @@ def review_schedule(
                 ReviewScheduleItem.reading_part_id == reading_part_id,
                 ReviewScheduleItem.status == "planned",
                 ReviewScheduleItem.due_date >= today,
+                ReviewScheduleItem.user_id == current_user.id,
             )
             .order_by(ReviewScheduleItem.due_date)
         )
@@ -136,9 +147,15 @@ def update_review_schedule(
     review_id: int,
     payload: ReviewScheduleUpdatePayload,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReviewScheduleItemOut:
     """Update a planned review schedule item."""
-    review_item = session.get(ReviewScheduleItem, review_id)
+    review_item = session.execute(
+        select(ReviewScheduleItem).where(
+            ReviewScheduleItem.id == review_id,
+            ReviewScheduleItem.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not review_item:
         raise HTTPException(
             status_code=404,
@@ -174,7 +191,10 @@ def update_review_schedule(
 
 
 @router.get("/reviews/stats")
-def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStatsOut]:
+def review_stats(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> list[ReviewPartStatsOut]:
     """Return review completion statistics per reading part."""
     rows = session.execute(
         select(
@@ -194,6 +214,10 @@ def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStat
         .outerjoin(
             ReviewScheduleItem,
             ReviewScheduleItem.reading_part_id == ReadingPart.id,
+        )
+        .where(
+            ReadingPart.user_id == current_user.id,
+            Book.user_id == current_user.id,
         )
         .group_by(
             ReadingPart.id,
@@ -222,6 +246,11 @@ def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStat
             ReviewAttempt.review_item_id == ReviewScheduleItem.id,
         )
         .where(ReviewAttempt.gpt_rating_1_to_5.is_not(None))
+        .where(
+            ReadingPart.user_id == current_user.id,
+            ReviewScheduleItem.user_id == current_user.id,
+            ReviewAttempt.user_id == current_user.id,
+        )
         .group_by(ReadingPart.id)
     ).all()
     gpt_stats: dict[int, tuple[int, float | None]] = {}
@@ -261,17 +290,34 @@ def review_stats(session: Session = Depends(get_session)) -> list[ReviewPartStat
 def review_detail(
     review_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReviewDetailOut:
     """Return review details with summary, notes, and questions."""
-    review_item = session.get(ReviewScheduleItem, review_id)
+    review_item = session.execute(
+        select(ReviewScheduleItem).where(
+            ReviewScheduleItem.id == review_id,
+            ReviewScheduleItem.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not review_item:
         raise HTTPException(
             status_code=404,
             detail={"detail": "Review item not found", "code": "NOT_FOUND"},
         )
 
-    part = session.get(ReadingPart, review_item.reading_part_id)
-    book = session.get(Book, part.book_id) if part else None
+    part = session.execute(
+        select(ReadingPart).where(
+            ReadingPart.id == review_item.reading_part_id,
+            ReadingPart.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+    book = (
+        session.execute(
+            select(Book).where(Book.id == part.book_id, Book.user_id == current_user.id)
+        ).scalar_one_or_none()
+        if part
+        else None
+    )
     if not part or not book:
         raise HTTPException(
             status_code=404,
@@ -292,7 +338,10 @@ def review_detail(
 
     attempt = session.execute(
         select(ReviewAttempt)
-        .where(ReviewAttempt.review_item_id == review_item.id)
+        .where(
+            ReviewAttempt.review_item_id == review_item.id,
+            ReviewAttempt.user_id == current_user.id,
+        )
         .order_by(ReviewAttempt.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
@@ -323,9 +372,15 @@ def complete_review(
     review_id: int,
     payload: ReviewCompletePayload,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReviewItemOut:
     """Complete a review item."""
-    review_item = session.get(ReviewScheduleItem, review_id)
+    review_item = session.execute(
+        select(ReviewScheduleItem).where(
+            ReviewScheduleItem.id == review_id,
+            ReviewScheduleItem.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not review_item:
         raise HTTPException(
             status_code=404,
@@ -335,12 +390,27 @@ def complete_review(
     review_item.status = "done"
     review_item.completed_at = datetime.now(timezone.utc)
 
-    attempt = ReviewAttempt(review_item_id=review_id, answers=payload.answers)
+    attempt = ReviewAttempt(
+        user_id=current_user.id,
+        review_item_id=review_id,
+        answers=payload.answers,
+    )
     session.add(attempt)
     session.commit()
 
-    part = session.get(ReadingPart, review_item.reading_part_id)
-    book = session.get(Book, part.book_id) if part else None
+    part = session.execute(
+        select(ReadingPart).where(
+            ReadingPart.id == review_item.reading_part_id,
+            ReadingPart.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+    book = (
+        session.execute(
+            select(Book).where(Book.id == part.book_id, Book.user_id == current_user.id)
+        ).scalar_one_or_none()
+        if part
+        else None
+    )
     if not part or not book:
         raise HTTPException(
             status_code=404,
@@ -355,9 +425,15 @@ def save_gpt_feedback(
     review_id: int,
     payload: ReviewFeedbackPayload,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReviewAttemptOut:
     """Save GPT feedback for a review."""
-    review_item = session.get(ReviewScheduleItem, review_id)
+    review_item = session.execute(
+        select(ReviewScheduleItem).where(
+            ReviewScheduleItem.id == review_id,
+            ReviewScheduleItem.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not review_item:
         raise HTTPException(
             status_code=404,
@@ -366,13 +442,20 @@ def save_gpt_feedback(
 
     attempt = session.execute(
         select(ReviewAttempt)
-        .where(ReviewAttempt.review_item_id == review_id)
+        .where(
+            ReviewAttempt.review_item_id == review_id,
+            ReviewAttempt.user_id == current_user.id,
+        )
         .order_by(ReviewAttempt.created_at.desc())
         .limit(1)
     ).scalar_one_or_none()
 
     if attempt is None:
-        attempt = ReviewAttempt(review_item_id=review_id, answers={})
+        attempt = ReviewAttempt(
+            user_id=current_user.id,
+            review_item_id=review_id,
+            answers={},
+        )
         session.add(attempt)
 
     gpt_payload = payload.gpt_check_result.model_dump(mode="json")

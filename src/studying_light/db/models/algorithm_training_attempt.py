@@ -1,8 +1,19 @@
 """Algorithm training attempt model."""
 
+import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Float, ForeignKey, Integer, String, Text, func
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Float,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    Uuid,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studying_light.db.base import Base
@@ -14,6 +25,11 @@ class AlgorithmTrainingAttempt(Base):
     __tablename__ = "algorithm_training_attempts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+    )
     algorithm_id: Mapped[int] = mapped_column(
         ForeignKey("algorithms.id"),
         index=True,

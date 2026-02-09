@@ -3,7 +3,7 @@
 from datetime import date
 
 
-def _import_algorithm(client, group_id: int) -> int:
+def _import_algorithm(client, group_id: int, headers: dict[str, str]) -> int:
     payload = {
         "groups": [],
         "algorithms": [
@@ -31,20 +31,21 @@ def _import_algorithm(client, group_id: int) -> int:
             }
         ],
     }
-    response = client.post("/api/v1/algorithms/import", json=payload)
+    response = client.post("/api/v1/algorithms/import", json=payload, headers=headers)
     assert response.status_code == 201
     return response.json()["algorithms_created"][0]["algorithm_id"]
 
 
-def test_algorithm_training_attempts(client) -> None:
+def test_algorithm_training_attempts(client, auth_headers: dict[str, str]) -> None:
     group_response = client.post(
         "/api/v1/algorithm-groups",
         json={"title": "Graphs"},
+        headers=auth_headers,
     )
     assert group_response.status_code == 201
     group_id = group_response.json()["id"]
 
-    algorithm_id = _import_algorithm(client, group_id)
+    algorithm_id = _import_algorithm(client, group_id, auth_headers)
 
     gpt_payload = {
         "meta": {
@@ -80,6 +81,7 @@ def test_algorithm_training_attempts(client) -> None:
             "mode": "memory",
             "gpt_check_result": gpt_payload,
         },
+        headers=auth_headers,
     )
     assert create_response.status_code == 201
     created = create_response.json()
@@ -91,6 +93,7 @@ def test_algorithm_training_attempts(client) -> None:
     list_response = client.get(
         "/api/v1/algorithm-trainings",
         params={"algorithm_id": algorithm_id},
+        headers=auth_headers,
     )
     assert list_response.status_code == 200
     items = list_response.json()
@@ -106,6 +109,7 @@ def test_algorithm_training_attempts(client) -> None:
             "accuracy": 92.5,
             "duration_sec": 45,
         },
+        headers=auth_headers,
     )
     assert typing_response.status_code == 201
     typing_payload = typing_response.json()

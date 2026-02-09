@@ -1,31 +1,17 @@
 """Alembic environment configuration."""
 
-import os
 from logging.config import fileConfig
-from pathlib import Path
 
 import sqlalchemy as sa
 from sqlalchemy import MetaData, engine_from_config, pool
 
 from alembic import context
+from studying_light.db.session import build_database_url
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
-
-
-def build_database_url() -> str:
-    """Build the SQLAlchemy database URL from environment variables."""
-    database_url = os.getenv("DATABASE_URL")
-    if database_url:
-        return database_url
-
-    db_path = os.getenv("DB_PATH", "data/app.db")
-    path = Path(db_path).expanduser()
-    if not path.is_absolute():
-        path = path.resolve()
-    return f"sqlite:///{path.as_posix()}"
 
 
 config.set_main_option("sqlalchemy.url", build_database_url())
@@ -49,20 +35,12 @@ def run_migrations_offline() -> None:
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
+        compare_type=True,
+        compare_server_default=True,
     )
 
     with context.begin_transaction():
         context.run_migrations()
-
-
-def _ensure_version_table(connection: sa.engine.Connection) -> None:
-    """Ensure the Alembic version table can store long revision IDs."""
-    version_table = sa.Table(
-        "alembic_version",
-        sa.MetaData(),
-        sa.Column("version_num", sa.String(64), primary_key=True),
-    )
-    version_table.create(connection, checkfirst=True)
 
 
 def run_migrations_online() -> None:
@@ -76,9 +54,19 @@ def run_migrations_online() -> None:
         poolclass=pool.NullPool,
     )
 
-    with connectable.connect() as connection:
-        _ensure_version_table(connection)
-        context.configure(connection=connection, target_metadata=target_metadata)
+    with connectable.begin() as connection:
+        version_table = sa.Table(
+            "alembic_version",
+            sa.MetaData(),
+            sa.Column("version_num", sa.String(64), primary_key=True),
+        )
+        version_table.create(connection, checkfirst=True)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+            compare_type=True,
+            compare_server_default=True,
+        )
 
         with context.begin_transaction():
             context.run_migrations()

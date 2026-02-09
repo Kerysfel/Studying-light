@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     AlgorithmCodeSnippetOut,
     AlgorithmDetailOut,
@@ -25,6 +26,7 @@ from studying_light.db.models.algorithm_group import (
 )
 from studying_light.db.models.algorithm_review_item import AlgorithmReviewItem
 from studying_light.db.models.reading_part import ReadingPart
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 logger = logging.getLogger(__name__)
@@ -36,6 +38,7 @@ DEFAULT_INTERVALS: list[int] = [1, 7, 16, 35, 90]
 
 def get_or_create_group(
     session: Session,
+    user: User,
     title: str,
     *,
     description: str | None = None,
@@ -51,7 +54,10 @@ def get_or_create_group(
 
     existing = (
         session.execute(
-            select(AlgorithmGroup).where(AlgorithmGroup.title_norm == normalized)
+            select(AlgorithmGroup).where(
+                AlgorithmGroup.title_norm == normalized,
+                AlgorithmGroup.user_id == user.id,
+            )
         )
         .scalars()
         .first()
@@ -62,6 +68,7 @@ def get_or_create_group(
         return existing, False
 
     group = AlgorithmGroup(
+        user_id=user.id,
         title=title.strip(),
         description=description,
         notes=notes,
@@ -91,9 +98,15 @@ def _get_questions_for_interval(
 def list_algorithms(
     group_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[AlgorithmListOut]:
     """List algorithms for a group."""
-    group = session.get(AlgorithmGroup, group_id)
+    group = session.execute(
+        select(AlgorithmGroup).where(
+            AlgorithmGroup.id == group_id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not group:
         raise HTTPException(
             status_code=404,
@@ -105,6 +118,7 @@ def list_algorithms(
             AlgorithmReviewItem.algorithm_id,
             func.count(AlgorithmReviewItem.id).label("review_items_count"),
         )
+        .where(AlgorithmReviewItem.user_id == current_user.id)
         .group_by(AlgorithmReviewItem.algorithm_id)
         .subquery()
     )
@@ -114,7 +128,10 @@ def list_algorithms(
             func.coalesce(counts_subquery.c.review_items_count, 0),
         )
         .outerjoin(counts_subquery, counts_subquery.c.algorithm_id == Algorithm.id)
-        .where(Algorithm.group_id == group_id)
+        .where(
+            Algorithm.group_id == group_id,
+            Algorithm.user_id == current_user.id,
+        )
         .order_by(Algorithm.id)
     ).all()
 
@@ -136,12 +153,17 @@ def list_algorithms(
 def get_algorithm_detail(
     algorithm_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmDetailOut:
     """Get algorithm detail with code snippets and source part."""
     row = session.execute(
         select(Algorithm, AlgorithmGroup)
         .join(AlgorithmGroup, Algorithm.group_id == AlgorithmGroup.id)
-        .where(Algorithm.id == algorithm_id)
+        .where(
+            Algorithm.id == algorithm_id,
+            Algorithm.user_id == current_user.id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
         .limit(1)
     ).first()
 
@@ -155,14 +177,22 @@ def get_algorithm_detail(
     code_snippets = (
         session.execute(
             select(AlgorithmCodeSnippet)
-            .where(AlgorithmCodeSnippet.algorithm_id == algorithm.id)
+            .where(
+                AlgorithmCodeSnippet.algorithm_id == algorithm.id,
+                AlgorithmCodeSnippet.user_id == current_user.id,
+            )
             .order_by(AlgorithmCodeSnippet.id)
         )
         .scalars()
         .all()
     )
     source_part = (
-        session.get(ReadingPart, algorithm.source_part_id)
+        session.execute(
+            select(ReadingPart).where(
+                ReadingPart.id == algorithm.source_part_id,
+                ReadingPart.user_id == current_user.id,
+            )
+        ).scalar_one_or_none()
         if algorithm.source_part_id
         else None
     )
@@ -171,7 +201,8 @@ def get_algorithm_detail(
     )
     review_items_count = session.execute(
         select(func.count(AlgorithmReviewItem.id)).where(
-            AlgorithmReviewItem.algorithm_id == algorithm.id
+            AlgorithmReviewItem.algorithm_id == algorithm.id,
+            AlgorithmReviewItem.user_id == current_user.id,
         )
     ).scalar_one()
 
@@ -206,6 +237,7 @@ def get_algorithm_detail(
 def import_algorithms(
     payload: AlgorithmImportPayload,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmImportResponse:
     """Import algorithms, groups, and schedule review items."""
     group_payload_by_norm: dict[str, AlgorithmGroupPayload] = {}
@@ -243,7 +275,12 @@ def import_algorithms(
         if item.group_id is not None:
             group = group_cache_by_id.get(item.group_id)
             if group is None:
-                group = session.get(AlgorithmGroup, item.group_id)
+                group = session.execute(
+                    select(AlgorithmGroup).where(
+                        AlgorithmGroup.id == item.group_id,
+                        AlgorithmGroup.user_id == current_user.id,
+                    )
+                ).scalar_one_or_none()
                 if not group:
                     raise HTTPException(
                         status_code=404,
@@ -261,6 +298,7 @@ def import_algorithms(
                 group_payload = group_payload_by_norm.get(normalized)
                 group, created = get_or_create_group(
                     session,
+                    current_user,
                     group_title_new,
                     description=group_payload.description if group_payload else None,
                     notes=group_payload.notes if group_payload else None,
@@ -268,7 +306,21 @@ def import_algorithms(
                 )
                 if created:
                     groups_created += 1
+
+        if item.source_part_id is not None:
+            source_part = session.execute(
+                select(ReadingPart).where(
+                    ReadingPart.id == item.source_part_id,
+                    ReadingPart.user_id == current_user.id,
+                )
+            ).scalar_one_or_none()
+            if not source_part:
+                raise HTTPException(
+                    status_code=404,
+                    detail={"detail": "Reading part not found", "code": "NOT_FOUND"},
+                )
         algorithm = Algorithm(
+            user_id=current_user.id,
             group_id=group.id,
             source_part_id=item.source_part_id,
             title=item.title,
@@ -290,6 +342,7 @@ def import_algorithms(
         )
 
         snippet = AlgorithmCodeSnippet(
+            user_id=current_user.id,
             algorithm_id=algorithm.id,
             code_kind=item.code.code_kind,
             language=item.code.language,
@@ -302,6 +355,7 @@ def import_algorithms(
         for interval_value in DEFAULT_INTERVALS:
             questions = _get_questions_for_interval(questions_map, interval_value)
             review_item = AlgorithmReviewItem(
+                user_id=current_user.id,
                 algorithm_id=algorithm.id,
                 interval_days=interval_value,
                 due_date=base_date + timedelta(days=interval_value),

@@ -21,7 +21,7 @@ Studying Light — легкий помощник для чтения и повт
 - Импорт JSON от GPT (сводка и вопросы).
 - Повторения с сохранением GPT-оценки (JSON).
 - Экспорт CSV/ZIP.
-- SQLite + утилита бэкапа (`make backup`).
+- Postgres + Alembic миграции.
 
 В разработке:
 
@@ -63,17 +63,9 @@ Studying Light — легкий помощник для чтения и повт
 
 ```bash
 cp .env.example .env
+docker compose up --build
 ```
 
-По умолчанию `.env.example` нацелен на Postgres. Чтобы остаться на SQLite,
-уберите `DATABASE_URL` (или оставьте пустым) и используйте `DB_PATH`.
-При необходимости отредактируйте `.env`, затем:
-
-```bash
-docker compose --env-file .env up --build
-```
-
-Данные SQLite сохраняются в `./data` и не теряются при перезапусках.
 Данные Postgres сохраняются в volume `postgres_data`.
 
 Откройте `http://localhost:8000` (фронт и API).
@@ -82,14 +74,14 @@ docker compose --env-file .env up --build
 
 ```bash
 uv sync --extra dev
-uv run alembic upgrade head
+DATABASE_URL=postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://studying_light:studying_light@localhost:5432/studying_light uv run alembic upgrade head
 uv run uvicorn studying_light.main:app --reload
 ```
 
 Откройте `http://localhost:8000`.
 
-По умолчанию данные лежат в `data/app.db`.
-Для Postgres задайте `DATABASE_URL` перед запуском.
+Для локального запуска задайте `DATABASE_URL` на ваш Postgres.
 
 Необязательный dev-сервер фронтенда:
 
@@ -184,9 +176,8 @@ curl http://localhost:8000/api/v1/today
 
 | Переменная | По умолчанию       | Примечания                                                   |
 | ---------- | ------------------ | ------------------------------------------------------------ |
-| `APP_ENV`  | `local`            | Метка окружения.                                             |
-| `DATABASE_URL` | `postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light` | Строка подключения. Если не задана (или пустая), используется SQLite. |
-| `DB_PATH`  | `/data/app.db`     | Значение для Docker. Если локально не задано, то `data/app.db`. |
+| `APP_ENV`  | `docker`           | Метка окружения (`docker`/`local`). |
+| `DATABASE_URL` | `postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light` | Основной URL базы данных. В Docker обязателен. |
 | `TZ`       | `Europe/Amsterdam` | Часовой пояс контейнера.                                     |
 
 ## Статус проекта

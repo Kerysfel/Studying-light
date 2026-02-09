@@ -3,8 +3,8 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from studying_light.api.v1.schemas import SettingsOut, SettingsUpdate
 from studying_light.api.v1.deps import get_current_user
+from studying_light.api.v1.schemas import SettingsOut, SettingsUpdate
 from studying_light.db.models.user import User
 from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.session import get_session

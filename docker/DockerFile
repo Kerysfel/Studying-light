@@ -22,7 +22,6 @@ COPY --from=frontend-build /frontend/dist /app/static
 
 RUN uv sync --frozen --no-dev
 RUN chmod +x /app/entrypoint.sh
-RUN mkdir -p /data
 
 EXPOSE 8000
 

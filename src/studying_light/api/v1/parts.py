@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from studying_light.api.v1.deps import get_optional_user
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     ImportGptPayload,
     ImportGptResponse,
@@ -17,8 +17,8 @@ from studying_light.api.v1.schemas import (
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
-from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.models.user import User
+from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.session import get_session
 from studying_light.services.user_settings import DEFAULT_SETTINGS
 
@@ -83,9 +83,12 @@ def _build_review_item_out(
 def create_part(
     payload: ReadingPartCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReadingPartOut:
     """Create a reading part."""
-    book = session.get(Book, payload.book_id)
+    book = session.execute(
+        select(Book).where(Book.id == payload.book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -96,7 +99,8 @@ def create_part(
     if part_index is None:
         max_index = session.execute(
             select(func.max(ReadingPart.part_index)).where(
-                ReadingPart.book_id == payload.book_id
+                ReadingPart.book_id == payload.book_id,
+                ReadingPart.user_id == current_user.id,
             )
         ).scalar()
         part_index = (max_index or 0) + 1
@@ -113,6 +117,7 @@ def create_part(
         )
 
     part = ReadingPart(
+        user_id=current_user.id,
         book_id=payload.book_id,
         part_index=part_index,
         label=payload.label,
@@ -131,6 +136,7 @@ def create_part(
 def list_parts(
     book_id: int | None = None,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[ReadingPartOut]:
     """List reading parts for a book."""
     if book_id is None:
@@ -143,6 +149,7 @@ def list_parts(
         session.execute(
             select(ReadingPart)
             .where(ReadingPart.book_id == book_id)
+            .where(ReadingPart.user_id == current_user.id)
             .order_by(ReadingPart.part_index)
         )
         .scalars()
@@ -156,10 +163,15 @@ def import_gpt(
     part_id: int,
     payload: ImportGptPayload,
     session: Session = Depends(get_session),
-    current_user: User | None = Depends(get_optional_user),
+    current_user: User = Depends(get_current_user),
 ) -> ImportGptResponse:
     """Import GPT summary and questions for a reading part."""
-    part = session.get(ReadingPart, part_id)
+    part = session.execute(
+        select(ReadingPart).where(
+            ReadingPart.id == part_id,
+            ReadingPart.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not part:
         raise HTTPException(
             status_code=404,
@@ -173,7 +185,8 @@ def import_gpt(
     existing_items = (
         session.execute(
             select(ReviewScheduleItem).where(
-                ReviewScheduleItem.reading_part_id == part_id
+                ReviewScheduleItem.reading_part_id == part_id,
+                ReviewScheduleItem.user_id == current_user.id,
             )
         )
         .scalars()
@@ -182,16 +195,16 @@ def import_gpt(
     for item in existing_items:
         session.delete(item)
 
-    settings = None
-    if current_user:
-        settings = session.get(UserSettings, current_user.id)
+    settings = session.get(UserSettings, current_user.id)
     intervals = settings.intervals_days if settings and settings.intervals_days else []
     if not intervals:
         intervals = DEFAULT_INTERVALS
 
     base_date = part.created_at.date() if part.created_at else date.today()
     review_items: list[ReviewItemOut] = []
-    book = session.get(Book, part.book_id)
+    book = session.execute(
+        select(Book).where(Book.id == part.book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -215,6 +228,7 @@ def import_gpt(
             questions = questions_by_interval.get(str(interval_value))
 
         item = ReviewScheduleItem(
+            user_id=current_user.id,
             reading_part_id=part.id,
             interval_days=interval_value,
             due_date=base_date + timedelta(days=interval_value),

@@ -15,7 +15,23 @@ def test_part_import_creates_reviews_and_today(
     session: Session,
 ) -> None:
     """Ensure import creates review items and today returns due reviews."""
-    book_response = client.post("/api/v1/books", json={"title": "Test Book"})
+    register = client.post(
+        "/api/v1/auth/register",
+        json={"email": "review-flow@local", "password": "secret"},
+    )
+    assert register.status_code == 201
+    login = client.post(
+        "/api/v1/auth/login",
+        json={"email": "review-flow@local", "password": "secret"},
+    )
+    token = login.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    book_response = client.post(
+        "/api/v1/books",
+        json={"title": "Test Book"},
+        headers=headers,
+    )
     assert book_response.status_code == 201
     book_id = book_response.json()["id"]
 
@@ -29,7 +45,7 @@ def test_part_import_creates_reviews_and_today(
             "freeform": ["Note 1"],
         },
     }
-    part_response = client.post("/api/v1/parts", json=part_payload)
+    part_response = client.post("/api/v1/parts", json=part_payload, headers=headers)
     assert part_response.status_code == 201
     part_id = part_response.json()["id"]
 
@@ -61,6 +77,7 @@ def test_part_import_creates_reviews_and_today(
     import_response = client.post(
         f"/api/v1/parts/{part_id}/import_gpt",
         json=import_payload,
+        headers=headers,
     )
     assert import_response.status_code == 200
     response_payload = import_response.json()
@@ -104,7 +121,7 @@ def test_part_import_creates_reviews_and_today(
     overdue_item.due_date = date.today() - timedelta(days=1)
     session.commit()
 
-    today_response = client.get("/api/v1/today")
+    today_response = client.get("/api/v1/today", headers=headers)
     assert today_response.status_code == 200
     today_items = today_response.json()["review_items"]
     assert len(today_items) == 1

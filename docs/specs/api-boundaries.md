@@ -16,7 +16,7 @@
 ## Аутентификация
 - Регистрация: `POST /api/v1/auth/register`.
 - Логин: `POST /api/v1/auth/login` → `access_token`.
-- Защищенные маршруты (например, `/api/v1/settings`) требуют заголовок `Authorization: Bearer <access_token>`.
+- Все доменные маршруты (`/api/v1/books`, `/api/v1/parts`, `/api/v1/reviews`, `/api/v1/algorithm-*`, `/api/v1/today`, `/api/v1/stats`, `/api/v1/export*`, `/api/v1/settings`) требуют заголовок `Authorization: Bearer <access_token>`.
 
 ## Формат ошибок
 API возвращает единый формат ошибок:
