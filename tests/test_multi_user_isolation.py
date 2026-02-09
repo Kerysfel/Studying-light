@@ -1,34 +1,11 @@
 """Multi-user data isolation tests."""
 
-from fastapi.testclient import TestClient
-
-
-def _register_and_login(
-    client: TestClient,
-    *,
-    email: str,
-    password: str = "secret",
-) -> dict[str, str]:
-    register = client.post(
-        "/api/v1/auth/register",
-        json={"email": email, "password": password},
-    )
-    assert register.status_code == 201
-    login = client.post(
-        "/api/v1/auth/login",
-        json={"email": email, "password": password},
-    )
-    assert login.status_code == 200
-    token = login.json()["access_token"]
-    return {"Authorization": f"Bearer {token}"}
-
-
 def test_multi_user_isolation_books_parts_reviews_algorithms(
-    client: TestClient,
+    client,
+    user_pair_headers: tuple[dict[str, str], dict[str, str]],
 ) -> None:
     """User B must not access or mutate user A domain data."""
-    user_a_headers = _register_and_login(client, email="isolation-a@local")
-    user_b_headers = _register_and_login(client, email="isolation-b@local")
+    user_a_headers, user_b_headers = user_pair_headers
 
     create_book = client.post(
         "/api/v1/books",

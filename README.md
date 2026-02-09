@@ -83,6 +83,24 @@ uv run uvicorn studying_light.main:app --reload
 
 Для локального запуска задайте `DATABASE_URL` на ваш Postgres.
 
+## Аутентификация
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"strongpass123"}'
+```
+
+Новый пользователь создается с `is_active=false`. Для входа нужна активация администратором.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"strongpass123"}'
+```
+
+Только access token (JWT). Refresh token не реализован.
+
 Необязательный dev-сервер фронтенда:
 
 ```bash
@@ -178,6 +196,8 @@ curl http://localhost:8000/api/v1/today
 | ---------- | ------------------ | ------------------------------------------------------------ |
 | `APP_ENV`  | `docker`           | Метка окружения (`docker`/`local`). |
 | `DATABASE_URL` | `postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light` | Основной URL базы данных. В Docker обязателен. |
+| `JWT_SECRET` | `change-me` | Секрет подписи JWT access token. |
+| `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | `60` | Срок жизни access token в минутах. |
 | `TZ`       | `Europe/Amsterdam` | Часовой пояс контейнера.                                     |
 
 ## Статус проекта

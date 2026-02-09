@@ -3,24 +3,15 @@
 from fastapi.testclient import TestClient
 
 
-def test_create_part_computes_pages_read(client: TestClient) -> None:
+def test_create_part_computes_pages_read(
+    client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
     """Ensure page_end computes pages_read based on the last saved page."""
-    register = client.post(
-        "/api/v1/auth/register",
-        json={"email": "parts-create@local", "password": "secret"},
-    )
-    assert register.status_code == 201
-    login = client.post(
-        "/api/v1/auth/login",
-        json={"email": "parts-create@local", "password": "secret"},
-    )
-    token = login.json()["access_token"]
-    headers = {"Authorization": f"Bearer {token}"}
-
     book_response = client.post(
         "/api/v1/books",
         json={"title": "Test Book"},
-        headers=headers,
+        headers=auth_headers,
     )
     assert book_response.status_code == 201
     book_id = book_response.json()["id"]
@@ -28,7 +19,7 @@ def test_create_part_computes_pages_read(client: TestClient) -> None:
     first_response = client.post(
         "/api/v1/parts",
         json={"book_id": book_id, "page_end": 10},
-        headers=headers,
+        headers=auth_headers,
     )
     assert first_response.status_code == 201
     first_part = first_response.json()
@@ -38,7 +29,7 @@ def test_create_part_computes_pages_read(client: TestClient) -> None:
     second_response = client.post(
         "/api/v1/parts",
         json={"book_id": book_id, "page_end": 25},
-        headers=headers,
+        headers=auth_headers,
     )
     assert second_response.status_code == 201
     second_part = second_response.json()

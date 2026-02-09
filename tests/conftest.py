@@ -4,12 +4,13 @@ from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import studying_light.db.models  # noqa: F401
 from studying_light.db.base import Base
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 from studying_light.main import app
 
@@ -46,15 +47,19 @@ def client(session: Session) -> Iterator[TestClient]:
 
 def _register_and_login(
     client: TestClient,
+    session: Session,
     *,
     email: str,
-    password: str = "secret",
+    password: str = "strongpass123",
 ) -> dict[str, str]:
     register_response = client.post(
         "/api/v1/auth/register",
         json={"email": email, "password": password},
     )
     assert register_response.status_code == 201
+    user = session.execute(select(User).where(User.email == email)).scalar_one()
+    user.is_active = True
+    session.commit()
 
     login_response = client.post(
         "/api/v1/auth/login",
@@ -66,14 +71,17 @@ def _register_and_login(
 
 
 @pytest.fixture()
-def auth_headers(client: TestClient) -> dict[str, str]:
+def auth_headers(client: TestClient, session: Session) -> dict[str, str]:
     """Default authenticated user headers."""
-    return _register_and_login(client, email="user@local")
+    return _register_and_login(client, session, email="user@local")
 
 
 @pytest.fixture()
-def user_pair_headers(client: TestClient) -> tuple[dict[str, str], dict[str, str]]:
+def user_pair_headers(
+    client: TestClient,
+    session: Session,
+) -> tuple[dict[str, str], dict[str, str]]:
     """Headers for two distinct users."""
-    first = _register_and_login(client, email="user-a@local")
-    second = _register_and_login(client, email="user-b@local")
+    first = _register_and_login(client, session, email="user-a@local")
+    second = _register_and_login(client, session, email="user-b@local")
     return first, second
