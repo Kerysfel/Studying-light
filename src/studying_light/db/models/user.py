@@ -66,5 +66,6 @@ class User(Base):
     )
     password_reset_requests: Mapped[list["PasswordResetRequest"]] = relationship(
         back_populates="user",
+        foreign_keys="PasswordResetRequest.user_id",
         cascade="all, delete-orphan",
     )

@@ -58,7 +58,7 @@ def _resolve_user_from_token(session: Session, token: str) -> User:
     return user
 
 
-def _touch_last_seen(session: Session, user: User) -> None:
+def touch_last_seen(session: Session, user: User) -> None:
     now = datetime.now(timezone.utc)
     last_seen = user.last_seen_at
     if last_seen is not None and last_seen.tzinfo is None:
@@ -79,7 +79,7 @@ def get_current_user(
     """Return the authenticated user."""
     token = _parse_bearer_token(authorization)
     user = _resolve_user_from_token(session, token)
-    _touch_last_seen(session, user)
+    touch_last_seen(session, user)
     return user
 
 
@@ -92,5 +92,17 @@ def get_optional_user(
         return None
     token = _parse_bearer_token(authorization)
     user = _resolve_user_from_token(session, token)
-    _touch_last_seen(session, user)
+    touch_last_seen(session, user)
     return user
+
+
+def get_current_admin_user(
+    current_user: User = Depends(get_current_user),
+) -> User:
+    """Return authenticated admin user."""
+    if not current_user.is_admin:
+        raise HTTPException(
+            status_code=403,
+            detail={"detail": "Admin access required", "code": "FORBIDDEN"},
+        )
+    return current_user

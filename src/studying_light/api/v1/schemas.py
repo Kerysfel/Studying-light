@@ -282,6 +282,38 @@ class StatusOkResponse(BaseModel):
     status: str = "ok"
 
 
+class AdminUserOut(BaseModel):
+    """Admin user list item."""
+
+    id: UUID
+    email: str
+    is_active: bool
+    is_admin: bool
+    created_at: datetime
+    last_login_at: datetime | None = None
+    last_seen_at: datetime | None = None
+    online: bool
+
+
+class AdminPasswordResetRequestOut(BaseModel):
+    """Admin password reset request item."""
+
+    id: int
+    user_id: UUID
+    email: str
+    status: str
+    requested_at: datetime
+    processed_at: datetime | None = None
+    processed_by_admin_id: UUID | None = None
+
+
+class AdminIssueTempPasswordOut(BaseModel):
+    """Issued temporary password payload."""
+
+    temp_password: str
+    expires_at: datetime
+
+
 class ImportGptPayload(BaseModel):
     """GPT import payload."""
 

@@ -6,6 +6,7 @@ from studying_light.db.models.algorithm_group import AlgorithmGroup
 from studying_light.db.models.algorithm_review_attempt import AlgorithmReviewAttempt
 from studying_light.db.models.algorithm_review_item import AlgorithmReviewItem
 from studying_light.db.models.algorithm_training_attempt import AlgorithmTrainingAttempt
+from studying_light.db.models.audit_log import AuditLog
 from studying_light.db.models.book import Book
 from studying_light.db.models.password_reset_request import PasswordResetRequest
 from studying_light.db.models.reading_part import ReadingPart
@@ -21,6 +22,7 @@ __all__ = [
     "AlgorithmReviewAttempt",
     "AlgorithmReviewItem",
     "AlgorithmTrainingAttempt",
+    "AuditLog",
     "Book",
     "PasswordResetRequest",
     "ReadingPart",

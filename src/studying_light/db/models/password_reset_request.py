@@ -30,10 +30,26 @@ class PasswordResetRequest(Base):
         nullable=False,
         server_default=text("'requested'"),
     )
-    created_at: Mapped[datetime] = mapped_column(
+    requested_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
         server_default=text("CURRENT_TIMESTAMP"),
     )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    processed_by_admin_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
-    user: Mapped["User"] = relationship(back_populates="password_reset_requests")
+    user: Mapped["User"] = relationship(
+        back_populates="password_reset_requests",
+        foreign_keys=[user_id],
+    )
+    processed_by_admin: Mapped["User | None"] = relationship(
+        foreign_keys=[processed_by_admin_id]
+    )
