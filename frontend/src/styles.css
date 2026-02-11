@@ -156,12 +156,11 @@
 .app-shell {
   display: grid;
   grid-template-columns: 280px 1fr;
-  min-height: 100vh;
+  height: 100vh;
+  overflow: hidden;
 }
 
 .sidebar {
-  position: sticky;
-  top: 0;
   height: 100vh;
   padding: 32px 28px;
   background: var(--color-surface-glass);
@@ -170,6 +169,8 @@
   display: flex;
   flex-direction: column;
   gap: 28px;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .brand {
@@ -212,6 +213,13 @@
   gap: 10px;
 }
 
+.nav-wrap {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding-right: 4px;
+}
+
 .nav-section {
   display: grid;
   gap: 8px;
@@ -250,6 +258,8 @@
   margin-top: auto;
   display: grid;
   gap: 8px;
+  position: relative;
+  z-index: 0;
 }
 
 .status-pill {
@@ -267,7 +277,10 @@
 }
 
 .content {
+  height: 100vh;
+  overflow: auto;
   padding: 34px 38px 48px;
+  min-width: 0;
 }
 
 .topbar {
@@ -1654,11 +1667,21 @@ select {
 @media (max-width: 900px) {
   .app-shell {
     grid-template-columns: 1fr;
+    height: auto;
+    overflow: visible;
   }
 
   .sidebar {
     position: relative;
     height: auto;
+    overflow: visible;
+  }
+
+  .nav-wrap {
+    flex: initial;
+    overflow: visible;
+    min-height: auto;
+    padding-right: 0;
   }
 
   .nav {
@@ -1667,6 +1690,8 @@ select {
   }
 
   .content {
+    height: auto;
+    overflow: visible;
     padding: 24px;
   }
 

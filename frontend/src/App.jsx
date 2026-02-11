@@ -111,23 +111,25 @@ const AppLayout = () => {
           </div>
         </div>
 
-        <nav className="nav">
-          {navSections.map((section) => (
-            <div key={section.key} className="nav-section">
-              {section.title && <div className="nav-section-title">{section.title}</div>}
-              {section.items.map((item) => (
-                <NavLink
-                  key={item.to}
-                  to={item.to}
-                  end={item.to === "/app"}
-                  className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
-                >
-                  {item.label}
-                </NavLink>
-              ))}
-            </div>
-          ))}
-        </nav>
+        <div className="nav-wrap">
+          <nav className="nav">
+            {navSections.map((section) => (
+              <div key={section.key} className="nav-section">
+                {section.title && <div className="nav-section-title">{section.title}</div>}
+                {section.items.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.to === "/app"}
+                    className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            ))}
+          </nav>
+        </div>
 
         <div className="sidebar-footer">
           <div className="status-pill">{me?.email || "Пользователь"}</div>
