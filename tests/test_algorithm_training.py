@@ -116,3 +116,50 @@ def test_algorithm_training_attempts(client, auth_headers: dict[str, str]) -> No
     assert typing_payload["mode"] == "typing"
     assert typing_payload["accuracy"] == 92.5
     assert typing_payload["duration_sec"] == 45
+
+
+def test_algorithm_training_history_sorted_and_limited(
+    client,
+    auth_headers: dict[str, str],
+) -> None:
+    group_response = client.post(
+        "/api/v1/algorithm-groups",
+        json={"title": "DP"},
+        headers=auth_headers,
+    )
+    assert group_response.status_code == 201
+    group_id = group_response.json()["id"]
+    algorithm_id = _import_algorithm(client, group_id, auth_headers)
+
+    created_ids: list[int] = []
+    for index in range(3):
+        response = client.post(
+            "/api/v1/algorithm-trainings",
+            json={
+                "algorithm_id": algorithm_id,
+                "code_text": f"attempt-{index}",
+                "mode": "memory",
+            },
+            headers=auth_headers,
+        )
+        assert response.status_code == 201
+        created_ids.append(response.json()["id"])
+
+    list_response = client.get(
+        "/api/v1/algorithm-trainings",
+        params={"algorithm_id": algorithm_id},
+        headers=auth_headers,
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()
+    assert [item["id"] for item in items] == list(reversed(created_ids))
+
+    limited_response = client.get(
+        "/api/v1/algorithm-trainings",
+        params={"algorithm_id": algorithm_id, "limit": 2},
+        headers=auth_headers,
+    )
+    assert limited_response.status_code == 200
+    limited_items = limited_response.json()
+    assert len(limited_items) == 2
+    assert [item["id"] for item in limited_items] == list(reversed(created_ids))[:2]

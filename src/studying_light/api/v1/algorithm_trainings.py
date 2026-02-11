@@ -1,6 +1,6 @@
 """Algorithm training endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -83,6 +83,7 @@ def create_algorithm_training(
 @router.get("/algorithm-trainings")
 def list_algorithm_trainings(
     algorithm_id: int | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> list[AlgorithmTrainingAttemptOut]:
@@ -100,7 +101,11 @@ def list_algorithm_trainings(
                 AlgorithmTrainingAttempt.algorithm_id == algorithm_id,
                 AlgorithmTrainingAttempt.user_id == current_user.id,
             )
-            .order_by(AlgorithmTrainingAttempt.created_at.desc())
+            .order_by(
+                AlgorithmTrainingAttempt.created_at.desc(),
+                AlgorithmTrainingAttempt.id.desc(),
+            )
+            .limit(limit)
         )
         .scalars()
         .all()

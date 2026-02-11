@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 
 import { getErrorMessage, request, requestText } from "../api.js";
+import ErrorBanner from "../components/ErrorBanner.jsx";
 
 const AlgorithmDetail = () => {
   const { id } = useParams();
@@ -21,21 +22,30 @@ const AlgorithmDetail = () => {
   const [typingAccuracy, setTypingAccuracy] = useState(0);
   const [typingSpeed, setTypingSpeed] = useState(0);
   const [typingDiff, setTypingDiff] = useState([]);
-  const [typingSaveError, setTypingSaveError] = useState("");
+  const [typingSaveError, setTypingSaveError] = useState(null);
   const [typingSaveSuccess, setTypingSaveSuccess] = useState("");
   const typingRef = useRef(null);
   const typingOverlayRef = useRef(null);
   const typingBackRef = useRef(null);
-  const [trainingError, setTrainingError] = useState("");
+  const [trainingError, setTrainingError] = useState(null);
   const [promptTemplate, setPromptTemplate] = useState("");
   const [promptLoading, setPromptLoading] = useState(false);
   const [promptCopied, setPromptCopied] = useState(false);
   const [gptJsonInput, setGptJsonInput] = useState("");
   const [trainingSaving, setTrainingSaving] = useState(false);
-  const [trainingSaveError, setTrainingSaveError] = useState("");
+  const [trainingSaveError, setTrainingSaveError] = useState(null);
   const [trainingSaveSuccess, setTrainingSaveSuccess] = useState("");
-  const [latestTraining, setLatestTraining] = useState(null);
+  const [trainingAttempts, setTrainingAttempts] = useState([]);
+  const [attemptsLoading, setAttemptsLoading] = useState(false);
+  const [attemptsError, setAttemptsError] = useState(null);
+  const [attemptModeFilter, setAttemptModeFilter] = useState("all");
   const codeInputRef = useRef(null);
+
+  const toError = (detail, code = "UNKNOWN", errors = null) => ({
+    detail,
+    code,
+    errors,
+  });
 
   useEffect(() => {
     let active = true;
@@ -69,12 +79,13 @@ const AlgorithmDetail = () => {
     setTrainingCode("");
     setTrainingDiff([]);
     setShowDiff(false);
-    setTrainingError("");
-    setTrainingSaveError("");
+    setTrainingError(null);
+    setTrainingSaveError(null);
     setTrainingSaveSuccess("");
     setGptJsonInput("");
     resetTyping();
     setTrainingMode("memory");
+    setAttemptModeFilter("all");
   }, [id]);
 
   useEffect(() => {
@@ -108,10 +119,21 @@ const AlgorithmDetail = () => {
 
   const loadTrainings = async () => {
     try {
+      setAttemptsLoading(true);
+      setAttemptsError(null);
       const data = await request(`/algorithm-trainings?algorithm_id=${id}`);
-      setLatestTraining(data[0] || null);
+      setTrainingAttempts(Array.isArray(data) ? data.slice(0, 50) : []);
     } catch (err) {
-      setLatestTraining(null);
+      setTrainingAttempts([]);
+      setAttemptsError(
+        toError(
+          err?.detail || "Не удалось загрузить историю тренировок",
+          err?.code || "UNKNOWN",
+          err?.errors || null
+        )
+      );
+    } finally {
+      setAttemptsLoading(false);
     }
   };
 
@@ -155,9 +177,62 @@ const AlgorithmDetail = () => {
     return date.toLocaleString();
   };
 
+  const latestTraining = trainingAttempts[0] || null;
   const latestGpt = latestTraining?.gpt_check_json || null;
   const latestOverall = latestGpt?.overall || null;
   const latestItems = Array.isArray(latestGpt?.items) ? latestGpt.items : [];
+
+  const filteredAttempts = useMemo(() => {
+    if (attemptModeFilter === "all") {
+      return trainingAttempts;
+    }
+    return trainingAttempts.filter((attempt) => attempt.mode === attemptModeFilter);
+  }, [attemptModeFilter, trainingAttempts]);
+
+  const trainingStats = useMemo(() => {
+    const attemptsTotal = trainingAttempts.length;
+    const lastAttemptAt = trainingAttempts[0]?.created_at || null;
+
+    const ratedAttempts = trainingAttempts.filter(
+      (item) => typeof item.rating_1_to_5 === "number"
+    );
+    const avgRating =
+      ratedAttempts.length > 0
+        ? (
+            ratedAttempts.reduce((sum, item) => sum + item.rating_1_to_5, 0) /
+            ratedAttempts.length
+          ).toFixed(2)
+        : null;
+
+    const typingAttempts = trainingAttempts.filter((item) => item.mode === "typing");
+    const typingWithAccuracy = typingAttempts.filter(
+      (item) => typeof item.accuracy === "number"
+    );
+    const avgAccuracy =
+      typingWithAccuracy.length > 0
+        ? (
+            typingWithAccuracy.reduce((sum, item) => sum + item.accuracy, 0) /
+            typingWithAccuracy.length
+          ).toFixed(1)
+        : null;
+    const bestAccuracy =
+      typingWithAccuracy.length > 0
+        ? Math.max(...typingWithAccuracy.map((item) => item.accuracy)).toFixed(1)
+        : null;
+    const totalDurationSec = typingAttempts.reduce(
+      (sum, item) => sum + (typeof item.duration_sec === "number" ? item.duration_sec : 0),
+      0
+    );
+
+    return {
+      attemptsTotal,
+      lastAttemptAt,
+      avgRating,
+      avgAccuracy,
+      bestAccuracy,
+      totalDurationSec,
+    };
+  }, [trainingAttempts]);
 
   const handleCopy = async (snippetId, text) => {
     try {
@@ -317,21 +392,21 @@ const AlgorithmDetail = () => {
     setTypingAccuracy(0);
     setTypingSpeed(0);
     setTypingDiff([]);
-    setTypingSaveError("");
+    setTypingSaveError(null);
     setTypingSaveSuccess("");
   };
 
   const handleSaveTyping = async () => {
-    setTypingSaveError("");
+    setTypingSaveError(null);
     setTypingSaveSuccess("");
     if (!typingInput.trim()) {
-      setTypingSaveError("Введите код для сохранения результата.");
+      setTypingSaveError(toError("Введите код для сохранения результата.", "VALIDATION_ERROR"));
       return;
     }
     const duration = Math.max(Math.round(typingElapsed), 1);
     try {
       setTrainingSaving(true);
-      const response = await request("/algorithm-trainings", {
+      await request("/algorithm-trainings", {
         method: "POST",
         body: JSON.stringify({
           algorithm_id: Number(id),
@@ -341,24 +416,25 @@ const AlgorithmDetail = () => {
           duration_sec: duration,
         }),
       });
-      setLatestTraining(response);
       await loadTrainings();
       setTypingSaveSuccess("Результат сохранён.");
     } catch (err) {
-      setTypingSaveError(getErrorMessage(err));
+      setTypingSaveError(
+        toError(err?.detail || "Не удалось сохранить результат", err?.code || "UNKNOWN", err?.errors || null)
+      );
     } finally {
       setTrainingSaving(false);
     }
   };
 
   const handleCompare = () => {
-    setTrainingError("");
+    setTrainingError(null);
     if (!referenceSnippet?.code_text) {
-      setTrainingError("Нет эталонного кода для сравнения.");
+      setTrainingError(toError("Нет эталонного кода для сравнения.", "BAD_REQUEST"));
       return;
     }
     if (!trainingCode.trim()) {
-      setTrainingError("Введите код для сравнения.");
+      setTrainingError(toError("Введите код для сравнения.", "VALIDATION_ERROR"));
       return;
     }
     const diffRows = buildDiff(referenceSnippet.code_text, trainingCode);
@@ -422,27 +498,27 @@ const AlgorithmDetail = () => {
   };
 
   const handleCopyPrompt = async () => {
-    setTrainingError("");
+    setTrainingError(null);
     setPromptCopied(false);
     try {
-      const prompt = await buildTrainingPrompt();
-      if (!prompt) {
-        setTrainingError("Не удалось сформировать промпт.");
-        return;
-      }
+        const prompt = await buildTrainingPrompt();
+        if (!prompt) {
+          setTrainingError(toError("Не удалось сформировать промпт.", "BAD_REQUEST"));
+          return;
+        }
       await navigator.clipboard.writeText(prompt);
       setPromptCopied(true);
       setTimeout(() => setPromptCopied(false), 1600);
     } catch (err) {
-      setTrainingError("Не удалось скопировать промпт.");
+      setTrainingError(toError("Не удалось скопировать промпт.", "COPY_FAILED"));
     }
   };
 
   const handleSaveTraining = async ({ requireGpt } = {}) => {
-    setTrainingSaveError("");
+    setTrainingSaveError(null);
     setTrainingSaveSuccess("");
     if (!trainingCode.trim()) {
-      setTrainingSaveError("Введите код для сохранения попытки.");
+      setTrainingSaveError(toError("Введите код для сохранения попытки.", "VALIDATION_ERROR"));
       return;
     }
     let gptPayload = null;
@@ -450,17 +526,17 @@ const AlgorithmDetail = () => {
       try {
         gptPayload = JSON.parse(gptJsonInput);
       } catch (err) {
-        setTrainingSaveError("Некорректный JSON оценки GPT.");
+        setTrainingSaveError(toError("Некорректный JSON оценки GPT.", "INVALID_JSON_BODY"));
         return;
       }
     } else if (requireGpt) {
-      setTrainingSaveError("Вставьте JSON оценки GPT.");
+      setTrainingSaveError(toError("Вставьте JSON оценки GPT.", "VALIDATION_ERROR"));
       return;
     }
 
     try {
       setTrainingSaving(true);
-      const response = await request("/algorithm-trainings", {
+      await request("/algorithm-trainings", {
         method: "POST",
         body: JSON.stringify({
           algorithm_id: Number(id),
@@ -469,10 +545,11 @@ const AlgorithmDetail = () => {
         }),
       });
       setTrainingSaveSuccess("Попытка сохранена.");
-      setLatestTraining(response);
       await loadTrainings();
     } catch (err) {
-      setTrainingSaveError(getErrorMessage(err));
+      setTrainingSaveError(
+        toError(err?.detail || "Не удалось сохранить попытку", err?.code || "UNKNOWN", err?.errors || null)
+      );
     } finally {
       setTrainingSaving(false);
     }
@@ -570,6 +647,129 @@ const AlgorithmDetail = () => {
             )}
           </div>
         )}
+
+        <div className="summary-block">
+          <div className="summary-title">Статистика тренировок</div>
+          <div className="card-grid">
+            <div className="card">
+              <div className="summary-title">Всего попыток</div>
+              <div className="summary-value">{trainingStats.attemptsTotal}</div>
+            </div>
+            <div className="card">
+              <div className="summary-title">Последняя попытка</div>
+              <div className="summary-value">{formatDateTime(trainingStats.lastAttemptAt)}</div>
+            </div>
+            <div className="card">
+              <div className="summary-title">Средняя оценка</div>
+              <div className="summary-value">
+                {trainingStats.avgRating != null ? `${trainingStats.avgRating}/5` : "-"}
+              </div>
+            </div>
+            <div className="card">
+              <div className="summary-title">Avg accuracy (typing)</div>
+              <div className="summary-value">
+                {trainingStats.avgAccuracy != null ? `${trainingStats.avgAccuracy}%` : "-"}
+              </div>
+            </div>
+            <div className="card">
+              <div className="summary-title">Best accuracy (typing)</div>
+              <div className="summary-value">
+                {trainingStats.bestAccuracy != null ? `${trainingStats.bestAccuracy}%` : "-"}
+              </div>
+            </div>
+            <div className="card">
+              <div className="summary-title">Суммарное время (typing)</div>
+              <div className="summary-value">{trainingStats.totalDurationSec} сек</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="summary-block">
+          <div className="panel-header">
+            <div>
+              <div className="summary-title">История тренировок</div>
+              <div className="muted">Показываем до 50 последних попыток.</div>
+            </div>
+            <div className="form-block">
+              <label htmlFor="training-mode-filter">Mode</label>
+              <select
+                id="training-mode-filter"
+                value={attemptModeFilter}
+                onChange={(event) => setAttemptModeFilter(event.target.value)}
+              >
+                <option value="all">all</option>
+                <option value="typing">typing</option>
+                <option value="memory">memory</option>
+              </select>
+            </div>
+          </div>
+          <ErrorBanner error={attemptsError} />
+          <div className="admin-table-wrap">
+            <table className="admin-table">
+              <thead>
+                <tr>
+                  <th>Date/Time</th>
+                  <th>Mode</th>
+                  <th>Rating</th>
+                  <th>Accuracy</th>
+                  <th>Duration</th>
+                  <th>Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {attemptsLoading && (
+                  <tr>
+                    <td colSpan={6}>
+                      <div className="admin-skeleton" />
+                    </td>
+                  </tr>
+                )}
+                {!attemptsLoading && filteredAttempts.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="admin-empty">
+                      История тренировок пуста.
+                    </td>
+                  </tr>
+                )}
+                {!attemptsLoading &&
+                  filteredAttempts.map((attempt) => {
+                    const overall = attempt.gpt_check_json?.overall || null;
+                    return (
+                      <tr key={attempt.id}>
+                        <td>{formatDateTime(attempt.created_at)}</td>
+                        <td>{attempt.mode}</td>
+                        <td>{typeof attempt.rating_1_to_5 === "number" ? `${attempt.rating_1_to_5}/5` : "-"}</td>
+                        <td>{typeof attempt.accuracy === "number" ? `${attempt.accuracy}%` : "-"}</td>
+                        <td>{typeof attempt.duration_sec === "number" ? `${attempt.duration_sec} сек` : "-"}</td>
+                        <td>
+                          <details>
+                            <summary>Details</summary>
+                            {overall ? (
+                              <div className="summary-text">
+                                <div>Key gaps: {overall.key_gaps?.length ? overall.key_gaps.join(", ") : "-"}</div>
+                                <div>Next steps: {overall.next_steps?.length ? overall.next_steps.join(", ") : "-"}</div>
+                                <div>Limitations: {overall.limitations?.length ? overall.limitations.join(", ") : "-"}</div>
+                              </div>
+                            ) : (
+                              <div className="summary-text">GPT feedback отсутствует.</div>
+                            )}
+                            {attempt.gpt_check_json && (
+                              <details>
+                                <summary>Show raw JSON</summary>
+                                <pre className="code-area">
+                                  <code>{JSON.stringify(attempt.gpt_check_json, null, 2)}</code>
+                                </pre>
+                              </details>
+                            )}
+                          </details>
+                        </td>
+                      </tr>
+                    );
+                  })}
+              </tbody>
+            </table>
+          </div>
+        </div>
 
         <div className="summary-grid">
           <div className="summary-card">
@@ -733,10 +933,8 @@ const AlgorithmDetail = () => {
                     {trainingSaving ? "Сохранение..." : "Сохранить попытку"}
                   </button>
                 </div>
-                {trainingError && <div className="alert error">{trainingError}</div>}
-                {trainingSaveError && (
-                  <div className="alert error">{trainingSaveError}</div>
-                )}
+                <ErrorBanner error={trainingError} />
+                <ErrorBanner error={trainingSaveError} />
                 {trainingSaveSuccess && (
                   <div className="alert success">{trainingSaveSuccess}</div>
                 )}
@@ -833,9 +1031,7 @@ const AlgorithmDetail = () => {
                     placeholder="Начните печатать здесь"
                   />
                 </div>
-                {typingSaveError && (
-                  <div className="alert error">{typingSaveError}</div>
-                )}
+                <ErrorBanner error={typingSaveError} />
                 {typingSaveSuccess && (
                   <div className="alert success">{typingSaveSuccess}</div>
                 )}
