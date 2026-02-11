@@ -51,6 +51,17 @@ Studying Light — легкий помощник для чтения и повт
 
 ![Review](docs/screenshots/05-review.png)
 
+### Скриншоты для публичного лендинга
+
+Хранятся в `frontend/public/landing/*`.
+
+- `landing_dashboard.png` — Dashboard / Today
+- `landing_session.png` — Session / Pomodoro
+- `landing_reviews.png` — Reviews list
+- `landing_review_detail.png` — Review detail
+- `landing_import.png` — Import JSON
+- `landing_admin.png` — Admin users/reset queue (optional)
+
 ## Документация
 
 - Архитектура — как устроено: `docs/specs/architecture.md`
