@@ -1,11 +1,23 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
-import { getErrorMessage, request } from "../api.js";
+import { request } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import AuthLayout from "../components/AuthLayout.jsx";
+import ErrorBanner from "../components/ErrorBanner.jsx";
 
-const INACTIVE_MESSAGE =
-  '{detail: "Account inactive, ask admin to activate", code: "ACCOUNT_INACTIVE"}';
+const toError = (detail, code, errors = null) => ({ detail, code, errors });
+
+const mapLoginError = (error) => {
+  const code = error?.code || "UNKNOWN";
+  if (code === "ACCOUNT_INACTIVE") {
+    return toError("Аккаунт не активирован администратором", code, error?.errors || null);
+  }
+  if (code === "AUTH_INVALID" || code === "HTTP_401") {
+    return toError("Неверный email или пароль", code, error?.errors || null);
+  }
+  return toError(error?.detail || "Ошибка входа", code, error?.errors || null);
+};
 
 const Login = () => {
   const navigate = useNavigate();
@@ -14,8 +26,7 @@ const Login = () => {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
-  const [inactiveMessage, setInactiveMessage] = useState("");
+  const [error, setError] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -36,17 +47,20 @@ const Login = () => {
     if (notice.email) {
       setEmail(notice.email);
     }
-    if (notice.code === "ACCOUNT_INACTIVE") {
-      setInactiveMessage(INACTIVE_MESSAGE);
-      return;
-    }
-    setError(getErrorMessage(notice));
+    setError(mapLoginError(notice));
   }, [consumeLoginNotice, loginNotice]);
+
+  const canSubmit = useMemo(() => {
+    return email.trim().length > 0 && password.length > 0 && !loading;
+  }, [email, loading, password]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    setError("");
-    setInactiveMessage("");
+    if (!canSubmit) {
+      return;
+    }
+
+    setError(null);
 
     try {
       setLoading(true);
@@ -62,63 +76,55 @@ const Login = () => {
       }
       navigate(redirectTo, { replace: true });
     } catch (requestError) {
-      if (requestError?.code === "ACCOUNT_INACTIVE") {
-        setInactiveMessage(INACTIVE_MESSAGE);
-      } else {
-        setError(getErrorMessage(requestError));
-      }
+      setError(mapLoginError(requestError));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="auth-shell">
-      <section className="panel auth-panel">
-        <h1>Вход</h1>
-        <p className="muted">Введите email и пароль.</p>
+    <AuthLayout title="Вход" subtitle="Введите email и пароль.">
+      <form className="form-grid" onSubmit={handleSubmit}>
+        <div className="form-block full">
+          <label htmlFor="login-email">Email</label>
+          <input
+            id="login-email"
+            type="email"
+            autoComplete="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoFocus
+            required
+          />
+        </div>
+        <div className="form-block full">
+          <label htmlFor="login-password">Пароль</label>
+          <input
+            id="login-password"
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            required
+          />
+        </div>
 
-        <form className="form-grid" onSubmit={handleSubmit}>
-          <div className="form-block full">
-            <label htmlFor="login-email">Email</label>
-            <input
-              id="login-email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              required
-            />
-          </div>
-          <div className="form-block full">
-            <label htmlFor="login-password">Пароль</label>
-            <input
-              id="login-password"
-              type="password"
-              autoComplete="current-password"
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-              required
-            />
-          </div>
+        <ErrorBanner error={error} />
 
-          {inactiveMessage && <div className="alert info full">{inactiveMessage}</div>}
-          {error && <div className="alert error full">{error}</div>}
+        <div className="auth-actions full">
+          <button className="primary-button" type="submit" disabled={!canSubmit}>
+            {loading ? "Входим..." : "Войти"}
+          </button>
+          <Link className="ghost-button" to="/forgot-password">
+            Забыли пароль?
+          </Link>
+        </div>
+      </form>
 
-          <div className="auth-actions full">
-            <button className="primary-button" type="submit" disabled={loading}>
-              {loading ? "Входим..." : "Войти"}
-            </button>
-            <Link className="ghost-button" to="/forgot-password">
-              Забыли пароль?
-            </Link>
-            <Link className="ghost-button" to="/register">
-              К регистрации
-            </Link>
-          </div>
-        </form>
-      </section>
-    </div>
+      <p className="muted auth-note">
+        Нет аккаунта? <Link className="inline-link" to="/register">Регистрация</Link>
+      </p>
+    </AuthLayout>
   );
 };
 

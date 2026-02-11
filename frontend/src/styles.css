@@ -1365,9 +1365,22 @@ select {
   width: min(560px, 100%);
 }
 
+.auth-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
 .auth-panel h1 {
   margin: 0 0 10px;
   font-family: var(--font-display);
+}
+
+.auth-back-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--color-accent-deep);
 }
 
 .auth-actions {
@@ -1375,6 +1388,34 @@ select {
   gap: 12px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.auth-note {
+  margin-top: 14px;
+}
+
+.error-banner {
+  width: 100%;
+}
+
+.error-banner-header {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.error-banner-header small {
+  font-size: 0.75rem;
+  opacity: 0.84;
+}
+
+.error-banner-list {
+  margin: 10px 0 0;
+  padding-left: 18px;
+  display: grid;
+  gap: 4px;
+  font-weight: 500;
 }
 
 .landing-shell {

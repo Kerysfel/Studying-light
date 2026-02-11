@@ -36,20 +36,38 @@ const parseJson = async (response) => {
   return response.json();
 };
 
+const asDetailString = (value, fallback = "Ошибка запроса") => {
+  if (typeof value === "string" && value.trim()) {
+    return value;
+  }
+  return fallback;
+};
+
 const normalizeError = (status, payload) => {
+  if (Array.isArray(payload?.detail)) {
+    return {
+      detail: asDetailString(payload.title, "Проверьте введенные данные."),
+      code: payload.code || "VALIDATION_ERROR",
+      errors: payload.errors || payload.detail,
+    };
+  }
+
   const candidate = payload?.detail && typeof payload.detail === "object" ? payload.detail : payload;
 
   if (candidate && typeof candidate === "object") {
     return {
-      detail: candidate.detail || payload?.detail || "Ошибка запроса",
+      detail: asDetailString(
+        candidate.detail,
+        asDetailString(payload?.detail, "Ошибка запроса")
+      ),
       code: candidate.code || payload?.code || `HTTP_${status}`,
       errors: candidate.errors || payload?.errors || null,
     };
   }
 
   return {
-    detail: typeof payload?.detail === "string" ? payload.detail : "Ошибка запроса",
-    code: `HTTP_${status}`,
+    detail: asDetailString(payload?.detail, "Ошибка запроса"),
+    code: payload?.code || `HTTP_${status}`,
     errors: null,
   };
 };
