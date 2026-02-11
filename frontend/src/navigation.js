@@ -1,4 +1,4 @@
-const baseNavItems = [
+export const mainNavItems = [
   { label: "Дашборд", to: "/app" },
   { label: "Сессия чтения", to: "/session" },
   { label: "Повторения", to: "/reviews" },
@@ -10,14 +10,15 @@ const baseNavItems = [
   { label: "О проекте", to: "/about" },
 ];
 
-const adminNavItems = [
-  { label: "Админ: пользователи", to: "/admin/users" },
-  { label: "Админ: заявки", to: "/admin/password-resets" },
+export const adminNavItems = [
+  { label: "Users", to: "/admin/users" },
+  { label: "Password resets", to: "/admin/password-resets" },
 ];
 
-export const getNavItems = (isAdmin = false) => {
-  if (!isAdmin) {
-    return baseNavItems;
+export const getNavSections = (isAdmin = false) => {
+  const sections = [{ key: "main", title: null, items: mainNavItems }];
+  if (isAdmin) {
+    sections.push({ key: "admin", title: "Admin", items: adminNavItems });
   }
-  return [...baseNavItems, ...adminNavItems];
+  return sections;
 };

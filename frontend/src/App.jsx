@@ -3,10 +3,11 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { getErrorMessage, request } from "./api.js";
 import { useAuth } from "./auth.jsx";
-import { getNavItems } from "./navigation.js";
+import { getNavSections } from "./navigation.js";
 
-const getPageTitle = (pathname, navItems) => {
-  const match = navItems.find((item) => {
+const getPageTitle = (pathname, sections) => {
+  const allItems = sections.flatMap((section) => section.items);
+  const match = allItems.find((item) => {
     if (item.to === pathname) {
       return true;
     }
@@ -24,8 +25,8 @@ const getPageTitle = (pathname, navItems) => {
 const AppLayout = () => {
   const location = useLocation();
   const { me, logout } = useAuth();
-  const navItems = useMemo(() => getNavItems(Boolean(me?.is_admin)), [me?.is_admin]);
-  const pageTitle = getPageTitle(location.pathname, navItems);
+  const navSections = useMemo(() => getNavSections(Boolean(me?.is_admin)), [me?.is_admin]);
+  const pageTitle = getPageTitle(location.pathname, navSections);
   const isSessionPage = location.pathname === "/session";
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPartId, setImportPartId] = useState("");
@@ -111,15 +112,20 @@ const AppLayout = () => {
         </div>
 
         <nav className="nav">
-          {navItems.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === "/app"}
-              className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
-            >
-              {item.label}
-            </NavLink>
+          {navSections.map((section) => (
+            <div key={section.key} className="nav-section">
+              {section.title && <div className="nav-section-title">{section.title}</div>}
+              {section.items.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.to === "/app"}
+                  className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
+                >
+                  {item.label}
+                </NavLink>
+              ))}
+            </div>
           ))}
         </nav>
 

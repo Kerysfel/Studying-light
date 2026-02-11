@@ -212,6 +212,19 @@
   gap: 10px;
 }
 
+.nav-section {
+  display: grid;
+  gap: 8px;
+}
+
+.nav-section-title {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 10px;
+  color: var(--color-muted);
+  margin-top: 8px;
+}
+
 .nav-item {
   padding: 12px 14px;
   border-radius: 12px;
@@ -1418,6 +1431,101 @@ select {
   font-weight: 500;
 }
 
+.admin-filters {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.admin-table-wrap {
+  overflow: auto;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 14px;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 920px;
+}
+
+.admin-table th,
+.admin-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--color-border-soft);
+  vertical-align: middle;
+}
+
+.admin-table th {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--color-muted);
+  background: var(--color-surface-muted);
+}
+
+.admin-table tr:last-child td {
+  border-bottom: none;
+}
+
+.admin-empty {
+  color: var(--color-muted);
+  text-align: center;
+}
+
+.admin-skeleton {
+  height: 28px;
+  border-radius: 8px;
+  background: linear-gradient(
+    90deg,
+    var(--color-surface-muted) 0%,
+    var(--color-surface) 50%,
+    var(--color-surface-muted) 100%
+  );
+  background-size: 240% 100%;
+  animation: pulseSlide 1.2s ease infinite;
+}
+
+.admin-action-button {
+  min-width: 142px;
+}
+
+.online-badge {
+  display: inline-flex;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.online-badge.online {
+  background: rgba(46, 125, 84, 0.15);
+  color: #1f5c3a;
+}
+
+.online-badge.offline {
+  background: rgba(109, 117, 132, 0.18);
+  color: #3b4252;
+}
+
+.admin-secret-box {
+  background: var(--color-surface-muted);
+  border: 1px solid var(--color-border-faint);
+  border-radius: 12px;
+  padding: 12px;
+  overflow-wrap: anywhere;
+}
+
+.admin-secret-box code {
+  font-family: "SFMono-Regular", "Menlo", "Consolas", "Liberation Mono",
+    monospace;
+  font-size: 0.95rem;
+}
+
 .landing-shell {
   max-width: 1120px;
   margin: 0 auto;
@@ -1531,6 +1639,15 @@ select {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes pulseSlide {
+  0% {
+    background-position: 100% 0;
+  }
+  100% {
+    background-position: -100% 0;
   }
 }
 
