@@ -1,17 +1,31 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation } from "react-router-dom";
 
 import { getErrorMessage, request } from "./api.js";
-import { navItems } from "./navigation.js";
+import { useAuth } from "./auth.jsx";
+import { getNavItems } from "./navigation.js";
 
-const getPageTitle = (pathname) => {
-  const match = navItems.find((item) => item.to === pathname);
+const getPageTitle = (pathname, navItems) => {
+  const match = navItems.find((item) => {
+    if (item.to === pathname) {
+      return true;
+    }
+    if (item.to === "/algorithm-groups" && pathname.startsWith("/algorithm-groups/")) {
+      return true;
+    }
+    if (item.to === "/algorithm-groups" && pathname.startsWith("/algorithms/")) {
+      return true;
+    }
+    return false;
+  });
   return match ? match.label : "Studying Light";
 };
 
 const AppLayout = () => {
   const location = useLocation();
-  const pageTitle = getPageTitle(location.pathname);
+  const { me, logout } = useAuth();
+  const navItems = useMemo(() => getNavItems(Boolean(me?.is_admin)), [me?.is_admin]);
+  const pageTitle = getPageTitle(location.pathname, navItems);
   const isSessionPage = location.pathname === "/session";
   const [showImportModal, setShowImportModal] = useState(false);
   const [importPartId, setImportPartId] = useState("");
@@ -58,6 +72,7 @@ const AppLayout = () => {
       setImportError("Вставьте JSON для импорта.");
       return;
     }
+
     let data;
     try {
       data = JSON.parse(importPayload);
@@ -94,25 +109,29 @@ const AppLayout = () => {
             <div className="brand-subtitle">Помощник для чтения и повторений</div>
           </div>
         </div>
+
         <nav className="nav">
           {navItems.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
-              end={item.to === "/"}
-              className={({ isActive }) =>
-                `nav-item${isActive ? " active" : ""}`
-              }
+              end={item.to === "/app"}
+              className={({ isActive }) => `nav-item${isActive ? " active" : ""}`}
             >
               {item.label}
             </NavLink>
           ))}
         </nav>
+
         <div className="sidebar-footer">
-          <div className="status-pill">Локальный режим</div>
+          <div className="status-pill">{me?.email || "Пользователь"}</div>
           <div className="status-meta">API: /api/v1</div>
+          <button type="button" className="ghost-button" onClick={logout}>
+            Выйти
+          </button>
         </div>
       </aside>
+
       <div className="content">
         <header className="topbar">
           <div>
@@ -130,6 +149,7 @@ const AppLayout = () => {
             </button>
           </div>
         </header>
+
         <main className="page">
           <Outlet />
         </main>

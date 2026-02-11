@@ -9,8 +9,8 @@ const NotFound = () => {
           <p className="muted">Такой страницы не существует.</p>
         </div>
       </div>
-      <Link className="primary-button" to="/">
-        Вернуться на дашборд
+      <Link className="primary-button" to="/app">
+        Вернуться в приложение
       </Link>
     </section>
   );
