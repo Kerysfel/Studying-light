@@ -15,6 +15,7 @@ from studying_light.api.v1.dashboard import router as dashboard_router
 from studying_light.api.v1.export import router as export_router
 from studying_light.api.v1.me import router as me_router
 from studying_light.api.v1.parts import router as parts_router
+from studying_light.api.v1.profile_transfer import router as profile_transfer_router
 from studying_light.api.v1.reviews import router as reviews_router
 from studying_light.api.v1.settings import router as settings_router
 from studying_light.api.v1.stats import router as stats_router
@@ -35,6 +36,7 @@ router.include_router(dashboard_router, tags=["dashboard"])
 router.include_router(stats_router, tags=["stats"])
 router.include_router(settings_router, tags=["settings"])
 router.include_router(export_router, tags=["export"])
+router.include_router(profile_transfer_router, tags=["profile-transfer"])
 
 
 @router.get("/health")

@@ -44,6 +44,35 @@
 - Restore:
   - `make pg-restore BACKUP_FILE=data/backups/studying_light.sql`
 
+## Profile-level backup/restore use-case
+- Для переносимого user-level backup/restore используется API-профильный архив:
+  - Экспорт: `GET /api/v1/profile-export.zip`
+  - Импорт: `POST /api/v1/profile-import`
+- Это не замена full DB dump, а перенос только данных текущего пользователя между инсталляциями.
+- Внутри импорта используется стратегия `legacy_id -> new_id` для всех таблиц:
+  - старые `id` не вставляются напрямую;
+  - все внешние ключи резолвятся через id-map;
+  - `user_id` в импортируемых сущностях всегда принудительно выставляется в `current_user.id`.
+
+### Какие таблицы входят в profile backup
+- `books`
+- `reading_parts`
+- `review_schedule_items`
+- `review_attempts`
+- `algorithm_groups`
+- `algorithms`
+- `algorithm_code_snippets`
+- `algorithm_review_items`
+- `algorithm_review_attempts`
+- `algorithm_training_attempts`
+- `user_settings` (опционально)
+
+### Какие таблицы не входят
+- `users` (учетные записи/пароли)
+- `audit_log`
+- `password_reset_requests`
+- прочие служебные/админские данные
+
 ## Manual pg_dump/pg_restore examples
 - Dump:
   - `docker compose exec -T postgres pg_dump -U studying_light studying_light > data/backups/studying_light.sql`
