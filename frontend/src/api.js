@@ -28,6 +28,32 @@ export const setApiAuthHandlers = (handlers) => {
   };
 };
 
+const parseContentDispositionFilename = (headerValue) => {
+  if (!headerValue || typeof headerValue !== "string") {
+    return null;
+  }
+
+  const filenameStarMatch = headerValue.match(/filename\*\s*=\s*([^;]+)/i);
+  if (filenameStarMatch?.[1]) {
+    let candidate = filenameStarMatch[1].trim();
+    if (candidate.toLowerCase().startsWith("utf-8''")) {
+      candidate = candidate.slice(7);
+    }
+    candidate = candidate.replace(/^"(.*)"$/, "$1");
+    try {
+      return decodeURIComponent(candidate);
+    } catch (error) {
+      return candidate;
+    }
+  }
+
+  const filenameMatch = headerValue.match(/filename\s*=\s*([^;]+)/i);
+  if (!filenameMatch?.[1]) {
+    return null;
+  }
+  return filenameMatch[1].trim().replace(/^"(.*)"$/, "$1");
+};
+
 const parseJson = async (response) => {
   const contentType = response.headers.get("content-type") || "";
   if (!contentType.includes("application/json")) {
@@ -99,11 +125,12 @@ const buildHeaders = (optionsHeaders = {}, withJson = true) => {
 };
 
 export const request = async (path, options = {}) => {
+  const withJson = !(options.body instanceof FormData);
   let response;
   try {
     response = await fetch(`${API_BASE}${path}`, {
       ...options,
-      headers: buildHeaders(options.headers, true),
+      headers: buildHeaders(options.headers, withJson),
     });
   } catch (error) {
     throw { detail: "Ошибка сети", code: "NETWORK_ERROR", errors: null };
@@ -119,6 +146,43 @@ export const request = async (path, options = {}) => {
   }
 
   return data;
+};
+
+export const downloadFile = async (path, filename) => {
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      method: "GET",
+      headers: buildHeaders({}, false),
+    });
+  } catch (error) {
+    throw { detail: "Ошибка сети", code: "NETWORK_ERROR", errors: null };
+  }
+
+  if (!response.ok) {
+    const data = await parseJson(response);
+    const normalized = normalizeError(response.status, data);
+    if (shouldHandleAuthError(response.status, normalized)) {
+      authHandlers.onAuthError?.(normalized);
+    }
+    throw normalized;
+  }
+
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get("content-disposition");
+  const filenameFromHeader = parseContentDispositionFilename(contentDisposition);
+  const resolvedFilename = filenameFromHeader || filename || "download.bin";
+  const objectUrl = URL.createObjectURL(blob);
+  try {
+    const link = document.createElement("a");
+    link.href = objectUrl;
+    link.download = resolvedFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  } finally {
+    URL.revokeObjectURL(objectUrl);
+  }
 };
 
 export const requestText = async (path, options = {}) => {
