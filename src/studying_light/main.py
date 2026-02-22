@@ -23,6 +23,11 @@ app.mount(
     StaticFiles(directory=STATIC_DIR / "assets", check_dir=False),
     name="assets",
 )
+app.mount(
+    "/landing",
+    StaticFiles(directory=STATIC_DIR / "landing", check_dir=False),
+    name="landing",
+)
 
 
 @app.get("/", include_in_schema=False)

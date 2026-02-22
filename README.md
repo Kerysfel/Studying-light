@@ -60,7 +60,10 @@ Studying Light — легкий помощник для чтения и повт
 - `landing_reviews.png` — Reviews list
 - `landing_review_detail.png` — Review detail
 - `landing_import.png` — Import JSON
-- `landing_admin.png` — Admin users/reset queue (optional)
+- `landing_export.png` — Export CSV/ZIP
+- `landing_auth_login.png` — Auth / login
+- `landing_auth_register.png` — Auth / register
+- `landing_admin_users.png` — Admin users/reset queue (optional)
 
 ## Документация
 

@@ -8,4 +8,7 @@ Expected files:
 - `landing_reviews.png`
 - `landing_review_detail.png`
 - `landing_import.png`
-- `landing_admin.png` (optional)
+- `landing_export.png`
+- `landing_auth_login.png`
+- `landing_auth_register.png`
+- `landing_admin_users.png` (optional)
