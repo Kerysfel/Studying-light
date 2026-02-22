@@ -12,6 +12,7 @@ export const mainNavItems = [
 
 export const adminNavItems = [
   { label: "Users", to: "/admin/users" },
+  { label: "Успеваемость", to: "/admin/performance" },
   { label: "Password resets", to: "/admin/password-resets" },
 ];
 

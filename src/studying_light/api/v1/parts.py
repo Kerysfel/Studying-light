@@ -1,6 +1,6 @@
 """Reading part endpoints."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select
@@ -20,6 +20,7 @@ from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 from studying_light.db.models.user import User
 from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.session import get_session
+from studying_light.services.activity_tracker import record_reading_session
 from studying_light.services.user_settings import DEFAULT_SETTINGS
 
 router: APIRouter = APIRouter()
@@ -127,6 +128,17 @@ def create_part(
         page_end=page_end_value,
     )
     session.add(part)
+    session.flush()
+    record_reading_session(
+        session,
+        user_id=current_user.id,
+        book_id=part.book_id,
+        reading_part_id=part.id,
+        ended_at=part.created_at or datetime.now(timezone.utc),
+        duration_sec=part.session_seconds,
+        pages_read=part.pages_read,
+        page_end=part.page_end,
+    )
     session.commit()
     session.refresh(part)
     return ReadingPartOut.model_validate(part)

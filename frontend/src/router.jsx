@@ -9,6 +9,8 @@ import {
 } from "./auth.jsx";
 import About from "./pages/About.jsx";
 import AdminPasswordResets from "./pages/AdminPasswordResets.jsx";
+import AdminPerformance from "./pages/AdminPerformance.jsx";
+import AdminPerformanceUser from "./pages/AdminPerformanceUser.jsx";
 import AdminUsers from "./pages/AdminUsers.jsx";
 import AlgorithmDetail from "./pages/AlgorithmDetail.jsx";
 import AlgorithmGroupDetail from "./pages/AlgorithmGroupDetail.jsx";
@@ -65,6 +67,8 @@ const router = createBrowserRouter([
                     element: <RequireAdmin />,
                     children: [
                       { path: "admin/users", element: <AdminUsers /> },
+                      { path: "admin/performance", element: <AdminPerformance /> },
+                      { path: "admin/performance/:userId", element: <AdminPerformanceUser /> },
                       { path: "admin/password-resets", element: <AdminPasswordResets /> },
                     ],
                   },

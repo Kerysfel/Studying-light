@@ -314,6 +314,137 @@ class AdminIssueTempPasswordOut(BaseModel):
     expires_at: datetime
 
 
+class AdminUserPerformanceItemOut(BaseModel):
+    """Aggregated performance for a single user in admin list."""
+
+    user_id: UUID
+    email: str
+    name: str | None = None
+    last_activity_at: datetime | None = None
+    total_activity_count: int
+    reading_sessions_count: int
+    reading_total_duration_sec: int
+    review_theory_count: int
+    review_theory_avg_rating: float | None = None
+    review_theory_avg_score: float | None = None
+    review_algorithm_theory_count: int
+    review_algorithm_theory_avg_rating: float | None = None
+    training_typing_count: int
+    training_typing_total_duration_sec: int
+    training_memory_count: int
+    training_memory_total_duration_sec: int
+
+
+class AdminUsersPerformanceListOut(BaseModel):
+    """Admin users performance list response."""
+
+    items: list[AdminUserPerformanceItemOut]
+    total: int
+    limit: int
+    offset: int
+
+
+class AdminReadingPerformanceSummaryOut(BaseModel):
+    """Reading performance summary."""
+
+    sessions_count: int
+    total_duration_sec: int
+    avg_duration_sec: float | None = None
+
+
+class AdminReviewTheoryPerformanceSummaryOut(BaseModel):
+    """Theory review performance summary."""
+
+    attempts_count: int
+    avg_rating: float | None = None
+    avg_score: float | None = None
+    last_rating: float | None = None
+    last_score: float | None = None
+
+
+class AdminReviewAlgorithmPerformanceSummaryOut(BaseModel):
+    """Algorithm review performance summary."""
+
+    attempts_count: int
+    avg_rating: float | None = None
+    last_rating: float | None = None
+
+
+class AdminTrainingPerformanceSummaryOut(BaseModel):
+    """Algorithm training performance summary."""
+
+    attempts_count: int
+    total_duration_sec: int
+    avg_duration_sec: float | None = None
+    avg_accuracy: float | None = None
+    avg_rating: float | None = None
+
+
+class AdminMemoryTrainingPerformanceSummaryOut(BaseModel):
+    """Memory training performance summary."""
+
+    attempts_count: int
+    total_duration_sec: int
+    avg_duration_sec: float | None = None
+    avg_rating: float | None = None
+
+
+class AdminUserPerformanceDetailOut(BaseModel):
+    """Admin user performance detail response."""
+
+    user_id: UUID
+    email: str
+    name: str | None = None
+    date_from: date | None = None
+    date_to: date | None = None
+    last_activity_at: datetime | None = None
+    total_activity_count: int
+    reading: AdminReadingPerformanceSummaryOut
+    review_theory: AdminReviewTheoryPerformanceSummaryOut
+    review_algorithm_theory: AdminReviewAlgorithmPerformanceSummaryOut
+    training_typing: AdminTrainingPerformanceSummaryOut
+    training_memory: AdminMemoryTrainingPerformanceSummaryOut
+
+
+class AdminUserActivityEventOut(BaseModel):
+    """Raw user activity event for admin activity feed."""
+
+    id: int
+    activity_kind: str
+    status: str
+    source: str
+    created_at: datetime
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
+    duration_sec: int | None = None
+    score_0_to_100: int | None = None
+    rating_1_to_5: int | None = None
+    result_label: str | None = None
+    accuracy: float | None = None
+    book_id: int | None = None
+    book_title: str | None = None
+    reading_part_id: int | None = None
+    reading_part_label: str | None = None
+    reading_part_index: int | None = None
+    review_item_id: int | None = None
+    algorithm_id: int | None = None
+    algorithm_title: str | None = None
+    algorithm_review_item_id: int | None = None
+    algorithm_training_attempt_id: int | None = None
+    review_attempt_id: int | None = None
+    algorithm_review_attempt_id: int | None = None
+    meta_json: dict | None = None
+
+
+class AdminUserActivitiesListOut(BaseModel):
+    """Admin user activities list response."""
+
+    items: list[AdminUserActivityEventOut]
+    total: int
+    limit: int
+    offset: int
+
+
 class ImportGptPayload(BaseModel):
     """GPT import payload."""
 

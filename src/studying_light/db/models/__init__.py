@@ -13,6 +13,7 @@ from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_attempt import ReviewAttempt
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 from studying_light.db.models.user import User
+from studying_light.db.models.user_activity_event import UserActivityEvent
 from studying_light.db.models.user_settings import UserSettings
 
 __all__ = [
@@ -29,5 +30,6 @@ __all__ = [
     "ReviewAttempt",
     "ReviewScheduleItem",
     "User",
+    "UserActivityEvent",
     "UserSettings",
 ]

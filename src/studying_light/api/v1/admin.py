@@ -3,9 +3,9 @@
 import secrets
 import string
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -13,12 +13,23 @@ from studying_light.api.v1.deps import get_current_admin_user
 from studying_light.api.v1.schemas import (
     AdminIssueTempPasswordOut,
     AdminPasswordResetRequestOut,
+    AdminUserActivitiesListOut,
+    AdminUserActivityEventOut,
     AdminUserOut,
+    AdminUserPerformanceDetailOut,
+    AdminUserPerformanceItemOut,
+    AdminUsersPerformanceListOut,
 )
 from studying_light.db.models.password_reset_request import PasswordResetRequest
 from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 from studying_light.security import hash_password
+from studying_light.services.admin_performance_service import (
+    get_user_identity,
+    get_user_performance,
+    list_user_activity_events,
+    list_users_performance,
+)
 from studying_light.services.audit_log import record_audit_event
 
 router: APIRouter = APIRouter(prefix="/admin")
@@ -67,6 +78,30 @@ def _generate_temp_password() -> str:
     )
 
 
+def _validation_error(detail: str) -> HTTPException:
+    return HTTPException(
+        status_code=422,
+        detail={
+            "detail": detail,
+            "code": "VALIDATION_ERROR",
+        },
+    )
+
+
+def _ensure_user_exists(
+    session: Session,
+    *,
+    user_id: uuid.UUID,
+) -> dict:
+    user_info = get_user_identity(session, user_id=user_id)
+    if user_info is None:
+        raise HTTPException(
+            status_code=404,
+            detail={"detail": "User not found", "code": "NOT_FOUND"},
+        )
+    return user_info
+
+
 @router.get("/users")
 def list_users(
     query: str | None = None,
@@ -96,6 +131,115 @@ def list_users(
     users = session.execute(stmt).scalars().all()
     now = datetime.now(timezone.utc)
     return [_build_admin_user_out(user, now) for user in users]
+
+
+@router.get("/users/performance")
+def list_users_performance_view(
+    search: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = Query(default=20, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    sort_by: str = "last_activity_at",
+    sort_dir: str = "desc",
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin_user),
+) -> AdminUsersPerformanceListOut:
+    """List users with aggregated performance metrics."""
+    del current_admin
+    try:
+        items, total = list_users_performance(
+            session,
+            search=search,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+            sort_by=sort_by,
+            sort_dir=sort_dir,
+        )
+    except ValueError as exc:
+        raise _validation_error(str(exc)) from exc
+
+    return AdminUsersPerformanceListOut(
+        items=[AdminUserPerformanceItemOut(**item) for item in items],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/users/{user_id}/performance")
+def get_user_performance_view(
+    user_id: uuid.UUID,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin_user),
+) -> AdminUserPerformanceDetailOut:
+    """Return aggregated performance summary for one user."""
+    del current_admin
+    user_info = _ensure_user_exists(session, user_id=user_id)
+    try:
+        summary = get_user_performance(
+            session,
+            user_id=user_id,
+            date_from=date_from,
+            date_to=date_to,
+        )
+    except ValueError as exc:
+        raise _validation_error(str(exc)) from exc
+
+    return AdminUserPerformanceDetailOut(
+        user_id=user_info["user_id"],
+        email=user_info["email"],
+        name=user_info["name"],
+        date_from=date_from,
+        date_to=date_to,
+        last_activity_at=summary["last_activity_at"],
+        total_activity_count=summary["total_activity_count"],
+        reading=summary["reading"],
+        review_theory=summary["review_theory"],
+        review_algorithm_theory=summary["review_algorithm_theory"],
+        training_typing=summary["training_typing"],
+        training_memory=summary["training_memory"],
+    )
+
+
+@router.get("/users/{user_id}/activities")
+def list_user_activities_view(
+    user_id: uuid.UUID,
+    activity_kind: str | None = None,
+    date_from: date | None = None,
+    date_to: date | None = None,
+    limit: int = Query(default=50, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+    session: Session = Depends(get_session),
+    current_admin: User = Depends(get_current_admin_user),
+) -> AdminUserActivitiesListOut:
+    """Return raw user activity event timeline for admin."""
+    del current_admin
+    _ensure_user_exists(session, user_id=user_id)
+    try:
+        events, total = list_user_activity_events(
+            session,
+            user_id=user_id,
+            activity_kind=activity_kind,
+            date_from=date_from,
+            date_to=date_to,
+            limit=limit,
+            offset=offset,
+        )
+    except ValueError as exc:
+        raise _validation_error(str(exc)) from exc
+
+    items = [AdminUserActivityEventOut(**event) for event in events]
+    return AdminUserActivitiesListOut(
+        items=items,
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 def _set_user_active(

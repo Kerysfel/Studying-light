@@ -13,6 +13,7 @@ from studying_light.db.models.algorithm import Algorithm
 from studying_light.db.models.algorithm_training_attempt import AlgorithmTrainingAttempt
 from studying_light.db.models.user import User
 from studying_light.db.session import get_session
+from studying_light.services.activity_tracker import record_algorithm_training
 
 router: APIRouter = APIRouter()
 
@@ -74,6 +75,19 @@ def create_algorithm_training(
         duration_sec=payload.duration_sec,
     )
     session.add(attempt)
+    session.flush()
+    record_algorithm_training(
+        session,
+        user_id=current_user.id,
+        algorithm_id=attempt.algorithm_id,
+        algorithm_training_attempt_id=attempt.id,
+        mode=attempt.mode,
+        started_at=attempt.created_at,
+        ended_at=attempt.created_at,
+        duration_sec=attempt.duration_sec,
+        accuracy=attempt.accuracy,
+        rating_1_to_5=attempt.rating_1_to_5,
+    )
     session.commit()
     session.refresh(attempt)
 

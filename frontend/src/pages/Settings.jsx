@@ -22,6 +22,76 @@ const toErrorObject = (error, fallbackCode = "UNKNOWN") => ({
   errors: error?.errors || null,
 });
 
+const IMPORT_SUMMARY_LABELS = {
+  books: "Книги",
+  reading_parts: "Части чтения",
+  review_schedule_items: "Элементы повторений",
+  review_attempts: "Попытки повторений",
+  algorithm_groups: "Группы алгоритмов",
+  algorithms: "Алгоритмы",
+  algorithm_code_snippets: "Кодовые сниппеты",
+  algorithm_review_items: "Алгоритмические повторения",
+  algorithm_review_attempts: "Попытки алгоритмических повторений",
+  algorithm_training_attempts: "Тренировочные попытки алгоритмов",
+  user_settings: "Пользовательские настройки",
+};
+
+const formatImportSummaryLabel = (key) =>
+  IMPORT_SUMMARY_LABELS[key] || "Данные профиля";
+
+const formatImportWarning = (warning) => {
+  if (typeof warning !== "string" || !warning.trim()) {
+    return "Импорт завершен с предупреждением.";
+  }
+
+  const text = warning.trim();
+  let match = text.match(
+    /^Found (\d+) imported books matching existing titles\.$/i
+  );
+  if (match) {
+    return `Найдено ${match[1]} импортированных книг с совпадающими названиями.`;
+  }
+
+  match = text.match(/^Imported books matching existing titles:\s*(.+)$/i);
+  if (match) {
+    return `Импортированные книги с совпадающими названиями: ${match[1]}.`;
+  }
+
+  match = text.match(
+    /^Found (\d+) imported algorithm groups matching existing title_norm\.$/i
+  );
+  if (match) {
+    return `Найдено ${match[1]} импортированных групп алгоритмов с совпадающими названиями.`;
+  }
+
+  match = text.match(
+    /^Imported algorithm groups matching existing title_norm:\s*(.+)$/i
+  );
+  if (match) {
+    return `Импортированные группы алгоритмов с совпадающими названиями: ${match[1]}.`;
+  }
+
+  match = text.match(
+    /^Adjusted (\d+) algorithm group titles due to uniqueness constraint\.$/i
+  );
+  if (match) {
+    return `Скорректировано названий групп алгоритмов из-за ограничения уникальности: ${match[1]}.`;
+  }
+
+  match = text.match(
+    /^Adjusted algorithm group title '(.+)' to '(.+)' due to uniqueness constraint\.$/i
+  );
+  if (match) {
+    return `Название группы алгоритмов изменено с «${match[1]}» на «${match[2]}» из-за ограничения уникальности.`;
+  }
+
+  if (/[A-Za-z]/.test(text)) {
+    return "Импорт завершен с предупреждением. Проверьте данные профиля.";
+  }
+
+  return text;
+};
+
 const Settings = () => {
   const [form, setForm] = useState({
     daily_goal_weekday_min: "",
@@ -317,139 +387,196 @@ const Settings = () => {
       <section className="panel">
         <div className="panel-header">
           <div>
-            <h2>Backup / Restore</h2>
+            <h2>Резервное копирование и восстановление</h2>
             <p className="muted">
-              Экспортируйте профиль в ZIP и импортируйте его в другую установку.
+              Сохраните профиль в ZIP-архив или восстановите данные из ранее созданной
+              резервной копии.
             </p>
           </div>
         </div>
 
-        <ErrorBanner error={backupError} />
-
-        <div className="form-actions backup-actions">
-          <button
-            className="primary-button"
-            type="button"
-            disabled={exporting || importing}
-            onClick={handleExport}
-          >
-            {exporting ? "Exporting..." : "Export profile (.zip)"}
-          </button>
-        </div>
-
-        <div className="form-grid">
-          <div className="form-block">
-            <label>Файл архива</label>
-            <input
-              ref={importFileInputRef}
-              type="file"
-              accept=".zip,application/zip"
-              onChange={handleFileChange}
-            />
-            <p className="muted backup-file-name">
-              {importFile ? `Выбран: ${importFile.name}` : "Файл не выбран"}
-            </p>
-          </div>
-
-          <div className="form-block">
-            <label>Режим импорта</label>
-            <select
-              value={importMode}
-              onChange={(event) => {
-                setImportMode(event.target.value);
-                if (event.target.value !== "replace") {
-                  setConfirmReplace(false);
-                }
-              }}
-            >
-              <option value="merge">merge</option>
-              <option value="replace">replace</option>
-            </select>
-          </div>
-
-          {importMode === "replace" && (
-            <label className="backup-confirm">
-              <input
-                type="checkbox"
-                checked={confirmReplace}
-                onChange={(event) => setConfirmReplace(event.target.checked)}
-              />
-              Я понимаю, что мои данные будут удалены
-            </label>
-          )}
-        </div>
-
-        <div className="form-actions backup-actions">
-          <button
-            className="primary-button"
-            type="button"
-            onClick={handleImport}
-            disabled={importDisabled}
-          >
-            {importing ? "Importing..." : "Import"}
-          </button>
-          {importMode === "replace" && !confirmReplace && (
-            <span className="muted">Для replace нужно подтверждение.</span>
-          )}
-        </div>
-
-        {backupResult && (
-          <div className="summary-card backup-summary">
-            <h3>Import result</h3>
-            <div className="backup-columns">
-              <div>
-                <h4>Imported</h4>
-                <ul>
-                  {Object.entries(backupResult.imported || {}).map(
-                    ([key, value]) => (
-                      <li key={key}>
-                        <span>{key}</span>
-                        <strong>{value}</strong>
-                      </li>
-                    )
-                  )}
-                </ul>
-              </div>
-
-              {Object.keys(backupResult.skipped || {}).length > 0 && (
-                <div>
-                  <h4>Skipped</h4>
-                  <ul>
-                    {Object.entries(backupResult.skipped || {}).map(
-                      ([key, value]) => (
-                        <li key={key}>
-                          <span>{key}</span>
-                          <strong>{value}</strong>
-                        </li>
-                      )
-                    )}
-                  </ul>
-                </div>
-              )}
+        <div className="backup-sections">
+          <div className="summary-card backup-card">
+            <div className="backup-card-intro">
+              <h3>Экспорт профиля</h3>
+              <p className="muted">
+                Скачайте ZIP-архив с данными профиля для переноса или резервной копии.
+              </p>
             </div>
-
-            {(backupResult.warnings || []).length > 0 && (
-              <details className="backup-warnings">
-                <summary>Warnings ({backupResult.warnings.length})</summary>
-                <ul>
-                  {backupResult.warnings.map((warning, index) => (
-                    <li key={`${warning}-${index}`}>{warning}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
-
-            <div className="form-actions backup-actions">
+            <div className="form-actions backup-actions backup-card-actions backup-export-actions">
               <button
+                className="ghost-button backup-action-button backup-action-secondary"
                 type="button"
-                className="ghost-button"
-                onClick={() => window.location.reload()}
+                disabled={exporting || importing}
+                onClick={handleExport}
               >
-                Reload app
+                {exporting ? "Экспорт..." : "Скачать архив (.zip)"}
               </button>
             </div>
           </div>
-        )}
+
+          <div className="summary-card backup-card">
+            <div className="backup-card-intro">
+              <h3>Импорт профиля</h3>
+              <p className="muted">
+                Загрузите ZIP-архив для восстановления профиля в текущей установке.
+              </p>
+            </div>
+            <ErrorBanner error={backupError} />
+
+            <div className="backup-import-flow">
+              <div className="form-block">
+                <label>Файл архива</label>
+                <input
+                  ref={importFileInputRef}
+                  id="profile-import-file"
+                  className="backup-file-input"
+                  type="file"
+                  accept=".zip,application/zip"
+                  onChange={handleFileChange}
+                  disabled={importing}
+                />
+                <label
+                  htmlFor="profile-import-file"
+                  className={`backup-file-picker${importing ? " disabled" : ""}`}
+                >
+                  <span className="backup-file-button" aria-hidden="true">
+                    Выбрать файл
+                  </span>
+                  <span className="backup-file-state">
+                    {importFile ? `Выбран: ${importFile.name}` : "Файл не выбран"}
+                  </span>
+                </label>
+              </div>
+
+              <div className="form-block">
+                <label>Режим импорта</label>
+                <div className="backup-select-wrap">
+                  <select
+                    className="backup-mode-select"
+                    value={importMode}
+                    disabled={importing}
+                    onChange={(event) => {
+                      setImportMode(event.target.value);
+                      if (event.target.value !== "replace") {
+                        setConfirmReplace(false);
+                      }
+                    }}
+                  >
+                    <option value="merge">Объединить</option>
+                    <option value="replace">Заменить</option>
+                  </select>
+                  <span className="backup-select-caret" aria-hidden="true">
+                    v
+                  </span>
+                </div>
+
+                <div className="backup-mode-help" aria-live="polite">
+                  <p className={`backup-mode-help-item${importMode === "merge" ? " active" : ""}`}>
+                    <strong>Объединить</strong> - добавляет данные, не удаляя существующие.
+                  </p>
+                  <p className={`backup-mode-help-item${importMode === "replace" ? " active warning" : ""}`}>
+                    <strong>Заменить</strong> - полностью заменяет текущие данные.
+                  </p>
+                </div>
+              </div>
+
+              {importMode === "replace" && (
+                <div className="backup-mode-warning" role="alert">
+                  <span className="backup-mode-warning-icon" aria-hidden="true">
+                    !
+                  </span>
+                  <span>
+                    Режим «Заменить» удалит текущие данные перед восстановлением из архива.
+                  </span>
+                </div>
+              )}
+
+              {importMode === "replace" && (
+                <label className="backup-confirm">
+                  <input
+                    type="checkbox"
+                    checked={confirmReplace}
+                    onChange={(event) => setConfirmReplace(event.target.checked)}
+                  />
+                  Я понимаю, что режим «Заменить» удалит текущие данные
+                </label>
+              )}
+            </div>
+
+            <div className="form-actions backup-actions backup-card-actions backup-import-actions">
+              {importMode === "replace" && !confirmReplace && (
+                <span className="muted backup-import-note">Для режима «Заменить» нужно подтверждение.</span>
+              )}
+              <button
+                className="primary-button backup-action-button backup-action-primary"
+                type="button"
+                onClick={handleImport}
+                disabled={importDisabled}
+              >
+                {importing ? "Импорт..." : "Импортировать"}
+              </button>
+            </div>
+
+            {backupResult && (
+              <div className="summary-card backup-summary">
+                <h3>Результат импорта</h3>
+                <div className="backup-columns">
+                  <div>
+                    <h4>Импортировано</h4>
+                    <ul>
+                      {Object.entries(backupResult.imported || {}).map(
+                        ([key, value]) => (
+                          <li key={key}>
+                            <span>{formatImportSummaryLabel(key)}</span>
+                            <strong>{value}</strong>
+                          </li>
+                        )
+                      )}
+                    </ul>
+                  </div>
+
+                  {Object.keys(backupResult.skipped || {}).length > 0 && (
+                    <div>
+                      <h4>Пропущено</h4>
+                      <ul>
+                        {Object.entries(backupResult.skipped || {}).map(
+                          ([key, value]) => (
+                            <li key={key}>
+                              <span>{formatImportSummaryLabel(key)}</span>
+                              <strong>{value}</strong>
+                            </li>
+                          )
+                        )}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+
+                {(backupResult.warnings || []).length > 0 && (
+                  <details className="backup-warnings">
+                    <summary>Предупреждения ({backupResult.warnings.length})</summary>
+                    <ul>
+                      {backupResult.warnings.map((warning, index) => (
+                        <li key={`${warning}-${index}`}>{formatImportWarning(warning)}</li>
+                      ))}
+                    </ul>
+                  </details>
+                )}
+
+                <div className="form-actions backup-actions">
+                  <button
+                    type="button"
+                    className="ghost-button"
+                    onClick={() => window.location.reload()}
+                  >
+                    Перезагрузить приложение
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </section>
 
       <section className="panel">

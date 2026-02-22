@@ -17,6 +17,9 @@ const getPageTitle = (pathname, sections) => {
     if (item.to === "/algorithm-groups" && pathname.startsWith("/algorithms/")) {
       return true;
     }
+    if (item.to === "/admin/performance" && pathname.startsWith("/admin/performance/")) {
+      return true;
+    }
     return false;
   });
   return match ? match.label : "Studying Light";

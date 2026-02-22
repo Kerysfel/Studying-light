@@ -25,6 +25,10 @@ from studying_light.db.models.review_attempt import ReviewAttempt
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
 from studying_light.db.models.user import User
 from studying_light.db.session import get_session
+from studying_light.services.activity_tracker import (
+    record_review_theory,
+    upsert_review_theory_feedback,
+)
 
 router: APIRouter = APIRouter()
 
@@ -396,6 +400,16 @@ def complete_review(
         answers=payload.answers,
     )
     session.add(attempt)
+    session.flush()
+    record_review_theory(
+        session,
+        user_id=current_user.id,
+        review_item_id=review_item.id,
+        reading_part_id=review_item.reading_part_id,
+        review_attempt_id=attempt.id,
+        started_at=attempt.created_at,
+        ended_at=review_item.completed_at,
+    )
     session.commit()
 
     part = session.execute(
@@ -457,6 +471,7 @@ def save_gpt_feedback(
             answers={},
         )
         session.add(attempt)
+        session.flush()
 
     gpt_payload = payload.gpt_check_result.model_dump(mode="json")
     rating, score, verdict = _compute_overall_metrics(payload.gpt_check_result.items)
@@ -465,6 +480,19 @@ def save_gpt_feedback(
     attempt.gpt_rating_1_to_5 = rating
     attempt.gpt_score_0_to_100 = score
     attempt.gpt_verdict = verdict
+    upsert_review_theory_feedback(
+        session,
+        user_id=current_user.id,
+        review_item_id=review_item.id,
+        reading_part_id=review_item.reading_part_id,
+        review_attempt_id=attempt.id,
+        started_at=attempt.created_at,
+        ended_at=review_item.completed_at or attempt.created_at,
+        score_0_to_100=score,
+        rating_1_to_5=rating,
+        result_label=verdict,
+        meta_json={"feedback_saved": True},
+    )
     session.commit()
     session.refresh(attempt)
 
