@@ -186,19 +186,11 @@ const ImportExport = () => {
       return;
     }
 
-    let data;
-    try {
-      data = JSON.parse(payload);
-    } catch (err) {
-      setError("Некорректный JSON. Проверьте формат.");
-      return;
-    }
-
     try {
       setLoading(true);
       const response = await request(`/parts/${selectedPartId}/import_gpt`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(payload.trim()),
       });
       const count = response.review_items?.length || 0;
       setSuccess(`Импорт завершен. Создано повторений: ${count}.`);

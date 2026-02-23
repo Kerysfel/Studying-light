@@ -2,7 +2,8 @@
 
 from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -21,11 +22,52 @@ from studying_light.db.models.user import User
 from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.session import get_session
 from studying_light.services.activity_tracker import record_reading_session
+from studying_light.services.gpt_json_parser import (
+    GptJsonParseError,
+    parse_gpt_json_output,
+)
 from studying_light.services.user_settings import DEFAULT_SETTINGS
 
 router: APIRouter = APIRouter()
 
 DEFAULT_INTERVALS: list[int] = DEFAULT_SETTINGS["intervals_days"]
+
+
+def _coerce_import_payload(payload: object) -> ImportGptPayload:
+    if isinstance(payload, str):
+        try:
+            payload = parse_gpt_json_output(payload)
+        except GptJsonParseError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": str(exc),
+                    "code": "INVALID_JSON_SYNTAX",
+                },
+            ) from exc
+
+    try:
+        return ImportGptPayload.model_validate(payload)
+    except ValidationError as exc:
+        formatted_errors = [
+            {
+                "loc": [str(item) for item in error.get("loc", ())],
+                "msg": error.get("msg", "Invalid value"),
+                "type": error.get("type", "value_error"),
+            }
+            for error in exc.errors()
+        ]
+        first_error = (
+            formatted_errors[0]["msg"] if formatted_errors else "Invalid payload"
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": first_error,
+                "code": "INVALID_JSON_SCHEMA",
+                "errors": formatted_errors,
+            },
+        ) from exc
 
 
 def _compute_pages_read(
@@ -173,7 +215,7 @@ def list_parts(
 @router.post("/parts/{part_id}/import_gpt")
 def import_gpt(
     part_id: int,
-    payload: ImportGptPayload,
+    payload: object = Body(...),
     session: Session = Depends(get_session),
     current_user: User = Depends(get_current_user),
 ) -> ImportGptResponse:
@@ -190,8 +232,9 @@ def import_gpt(
             detail={"detail": "Reading part not found", "code": "NOT_FOUND"},
         )
 
-    part.gpt_summary = payload.gpt_summary
-    questions_by_interval = payload.gpt_questions_by_interval.root
+    import_payload = _coerce_import_payload(payload)
+    part.gpt_summary = import_payload.gpt_summary
+    questions_by_interval = import_payload.gpt_questions_by_interval.root
     part.gpt_questions_by_interval = questions_by_interval
 
     existing_items = (
@@ -238,6 +281,16 @@ def import_gpt(
         questions = questions_by_interval.get(interval_value)
         if questions is None:
             questions = questions_by_interval.get(str(interval_value))
+        if not questions:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": (
+                        f"Missing questions for interval {interval_value} days"
+                    ),
+                    "code": "INVALID_JSON_BUSINESS_RULES",
+                },
+            )
 
         item = ReviewScheduleItem(
             user_id=current_user.id,

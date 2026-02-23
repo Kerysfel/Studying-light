@@ -77,19 +77,11 @@ const AppLayout = () => {
       return;
     }
 
-    let data;
-    try {
-      data = JSON.parse(importPayload);
-    } catch (err) {
-      setImportError("Некорректный JSON. Проверь формат и попробуй снова.");
-      return;
-    }
-
     try {
       setImportLoading(true);
       const response = await request(`/parts/${importPartId}/import_gpt`, {
         method: "POST",
-        body: JSON.stringify(data),
+        body: JSON.stringify(importPayload.trim()),
       });
       const count = response.review_items?.length || 0;
       setToastMessage(`Импорт выполнен. Создано повторений: ${count}.`);

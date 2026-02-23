@@ -1,6 +1,9 @@
 const API_BASE = "/api/v1";
 
 const errorMessages = {
+  INVALID_JSON_SYNTAX: "JSON не распознан. Уберите лишний текст и проверьте формат.",
+  INVALID_JSON_SCHEMA: "JSON распознан, но не соответствует ожидаемой схеме.",
+  INVALID_JSON_BUSINESS_RULES: "JSON корректен, но нарушает правила импорта.",
   INVALID_JSON_BODY: "Некорректный JSON. Проверь формат и попробуй снова.",
   VALIDATION_ERROR: "Проверьте введенные данные.",
   IMPORT_PAYLOAD_INVALID: "Некорректные данные импорта. Проверь формат.",
