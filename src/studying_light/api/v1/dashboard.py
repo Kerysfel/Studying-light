@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     AlgorithmReviewItemOut,
     BookProgressOut,
@@ -19,6 +20,7 @@ from studying_light.db.models.algorithm_review_item import AlgorithmReviewItem
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -62,11 +64,18 @@ def _build_algorithm_review_item_out(
 
 
 @router.get("/today")
-def today(session: Session = Depends(get_session)) -> TodayResponse:
+def today(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> TodayResponse:
     """Return today's reading plan and reviews."""
     today_date = date.today()
     active_books = (
-        session.execute(select(Book).where(Book.status == "active").order_by(Book.id))
+        session.execute(
+            select(Book)
+            .where(Book.status == "active", Book.user_id == current_user.id)
+            .order_by(Book.id)
+        )
         .scalars()
         .all()
     )
@@ -84,6 +93,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
                 ),
             )
             .where(ReadingPart.book_id.in_(book_ids))
+            .where(ReadingPart.user_id == current_user.id)
             .group_by(ReadingPart.book_id)
         ).all()
         pages_by_book = {book_id: int(total or 0) for book_id, total in pages_rows}
@@ -95,6 +105,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         .where(
             ReviewScheduleItem.due_date == today_date,
             ReviewScheduleItem.status == "planned",
+            ReviewScheduleItem.user_id == current_user.id,
         )
         .order_by(ReviewScheduleItem.id)
     ).all()
@@ -110,6 +121,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         .where(
             ReviewScheduleItem.due_date < today_date,
             ReviewScheduleItem.status == "planned",
+            ReviewScheduleItem.user_id == current_user.id,
         )
         .order_by(ReviewScheduleItem.due_date, ReviewScheduleItem.id)
     ).all()
@@ -126,6 +138,7 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         .where(
             AlgorithmReviewItem.due_date == today_date,
             AlgorithmReviewItem.status == "planned",
+            AlgorithmReviewItem.user_id == current_user.id,
         )
         .order_by(AlgorithmReviewItem.id)
     ).all()
@@ -135,10 +148,15 @@ def today(session: Session = Depends(get_session)) -> TodayResponse:
         for item, algorithm, group in algorithm_review_rows
     ]
 
-    review_total = session.execute(select(func.count(ReviewScheduleItem.id))).scalar()
+    review_total = session.execute(
+        select(func.count(ReviewScheduleItem.id)).where(
+            ReviewScheduleItem.user_id == current_user.id
+        )
+    ).scalar()
     review_completed = session.execute(
         select(func.count(ReviewScheduleItem.id)).where(
-            ReviewScheduleItem.status == "done"
+            ReviewScheduleItem.status == "done",
+            ReviewScheduleItem.user_id == current_user.id,
         )
     ).scalar()
 

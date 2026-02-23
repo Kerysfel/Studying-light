@@ -1,11 +1,80 @@
-# Database storage and backups
+# Database (Postgres)
 
-## Persistence
-- The SQLite file lives at `data/app.db` for local runs.
-- Docker uses `/data/app.db` and `docker-compose.yml` bind-mounts `./data` to `/data`, so rebuilds and container removal keep the database as long as `./data` remains.
+## Storage
+- Docker uses PostgreSQL (`postgres:16-alpine`).
+- Persistent data is stored in the named Docker volume `postgres_data`.
+- Application container startup depends on a healthy Postgres container.
 
-## Backups
-- Run `make backup` or `uv run python -m studying_light.db.backup` to create a timestamped copy.
-- Backups go to `data/backups/` (or `/data/backups` in Docker).
-- Use `--output-dir` to override the backup directory.
-- Only file-based SQLite URLs are supported.
+## Required configuration
+- `DATABASE_URL` is required in Docker runtime.
+- `docker-compose.yml` passes `IN_DOCKER=1`; if `DATABASE_URL` is missing, app startup fails with:
+  - `{ "detail": "DATABASE_URL is required when running in Docker", "code": "DATABASE_URL_REQUIRED" }`
+
+## Run and migrate
+- Start stack: `cp .env.example .env && docker compose up --build`
+- Run migrations in app container:
+  - `docker compose run --rm --entrypoint uv -e DATABASE_URL=postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light app run alembic upgrade head`
+
+## Migration smoke check (clean Postgres)
+- Use `make postgres-alembic-smoke`.
+- It validates:
+  - clean DB `alembic upgrade head`
+  - repeated `alembic upgrade head` (no-op)
+  - `alembic downgrade -1` and back to `upgrade head`
+
+## Admin/reset smoke check (Postgres)
+- Use `make pg-smoke-admin`.
+- It validates:
+  - clean Postgres DB: `alembic upgrade head` and repeated no-op `upgrade head`
+  - migration `0014_add_audit_log_and_admin_reset_fields` backfill path:
+    - bootstrap DB to revision `0013`
+    - insert legacy `password_reset_requests` row
+    - upgrade to `head`
+    - assert `requested_at` is backfilled from `created_at`
+    - assert FK for `processed_by_admin_id` exists
+  - admin/reset regression tests:
+    - `tests/test_admin_api.py::test_admin_password_reset_flow_with_temp_password`
+    - `tests/test_admin_api.py::test_admin_users_list_reports_online_after_heartbeat`
+  - cleanup with `docker compose down -v`
+
+## Backup and restore
+- Backup:
+  - `make pg-backup`
+  - Output: `data/backups/studying_light.sql`
+- Restore:
+  - `make pg-restore BACKUP_FILE=data/backups/studying_light.sql`
+
+## Profile-level backup/restore use-case
+- Для переносимого user-level backup/restore используется API-профильный архив:
+  - Экспорт: `GET /api/v1/profile-export.zip`
+  - Импорт: `POST /api/v1/profile-import`
+- Это не замена full DB dump, а перенос только данных текущего пользователя между инсталляциями.
+- Внутри импорта используется стратегия `legacy_id -> new_id` для всех таблиц:
+  - старые `id` не вставляются напрямую;
+  - все внешние ключи резолвятся через id-map;
+  - `user_id` в импортируемых сущностях всегда принудительно выставляется в `current_user.id`.
+
+### Какие таблицы входят в profile backup
+- `books`
+- `reading_parts`
+- `review_schedule_items`
+- `review_attempts`
+- `algorithm_groups`
+- `algorithms`
+- `algorithm_code_snippets`
+- `algorithm_review_items`
+- `algorithm_review_attempts`
+- `algorithm_training_attempts`
+- `user_settings` (опционально)
+
+### Какие таблицы не входят
+- `users` (учетные записи/пароли)
+- `audit_log`
+- `password_reset_requests`
+- прочие служебные/админские данные
+
+## Manual pg_dump/pg_restore examples
+- Dump:
+  - `docker compose exec -T postgres pg_dump -U studying_light studying_light > data/backups/studying_light.sql`
+- Restore:
+  - `docker compose exec -T postgres psql -U studying_light -d studying_light < data/backups/studying_light.sql`

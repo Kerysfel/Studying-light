@@ -3,15 +3,23 @@
 from fastapi.testclient import TestClient
 
 
-def test_create_part_computes_pages_read(client: TestClient) -> None:
+def test_create_part_computes_pages_read(
+    client: TestClient,
+    auth_headers: dict[str, str],
+) -> None:
     """Ensure page_end computes pages_read based on the last saved page."""
-    book_response = client.post("/api/v1/books", json={"title": "Test Book"})
+    book_response = client.post(
+        "/api/v1/books",
+        json={"title": "Test Book"},
+        headers=auth_headers,
+    )
     assert book_response.status_code == 201
     book_id = book_response.json()["id"]
 
     first_response = client.post(
         "/api/v1/parts",
         json={"book_id": book_id, "page_end": 10},
+        headers=auth_headers,
     )
     assert first_response.status_code == 201
     first_part = first_response.json()
@@ -21,6 +29,7 @@ def test_create_part_computes_pages_read(client: TestClient) -> None:
     second_response = client.post(
         "/api/v1/parts",
         json={"book_id": book_id, "page_end": 25},
+        headers=auth_headers,
     )
     assert second_response.status_code == 201
     second_part = second_response.json()

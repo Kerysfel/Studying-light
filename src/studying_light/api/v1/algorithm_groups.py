@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     AlgorithmGroupAlgorithmOut,
     AlgorithmGroupCreate,
@@ -13,7 +14,11 @@ from studying_light.api.v1.schemas import (
     AlgorithmGroupUpdate,
 )
 from studying_light.db.models.algorithm import Algorithm
-from studying_light.db.models.algorithm_group import AlgorithmGroup, normalize_group_title
+from studying_light.db.models.algorithm_group import (
+    AlgorithmGroup,
+    normalize_group_title,
+)
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -21,12 +26,16 @@ router: APIRouter = APIRouter()
 
 def _build_group_detail(
     session: Session,
+    user: User,
     group: AlgorithmGroup,
 ) -> AlgorithmGroupDetailOut:
     algorithms = (
         session.execute(
             select(Algorithm)
-            .where(Algorithm.group_id == group.id)
+            .where(
+                Algorithm.group_id == group.id,
+                Algorithm.user_id == user.id,
+            )
             .order_by(Algorithm.id)
         )
         .scalars()
@@ -55,6 +64,7 @@ def _build_group_detail(
 def list_algorithm_groups(
     query: str | None = None,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[AlgorithmGroupListOut]:
     """List algorithm groups with optional title search."""
     counts_subquery = (
@@ -62,6 +72,7 @@ def list_algorithm_groups(
             Algorithm.group_id,
             func.count(Algorithm.id).label("algorithms_count"),
         )
+        .where(Algorithm.user_id == current_user.id)
         .group_by(Algorithm.group_id)
         .subquery()
     )
@@ -71,6 +82,7 @@ def list_algorithm_groups(
             func.coalesce(counts_subquery.c.algorithms_count, 0),
         )
         .outerjoin(counts_subquery, counts_subquery.c.group_id == AlgorithmGroup.id)
+        .where(AlgorithmGroup.user_id == current_user.id)
         .order_by(AlgorithmGroup.title)
     )
 
@@ -96,27 +108,35 @@ def list_algorithm_groups(
 def get_algorithm_group(
     group_id: int,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmGroupDetailOut:
     """Get algorithm group detail with algorithms list."""
-    group = session.get(AlgorithmGroup, group_id)
+    group = session.execute(
+        select(AlgorithmGroup).where(
+            AlgorithmGroup.id == group_id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not group:
         raise HTTPException(
             status_code=404,
             detail={"detail": "Algorithm group not found", "code": "NOT_FOUND"},
         )
-    return _build_group_detail(session, group)
+    return _build_group_detail(session, current_user, group)
 
 
 @router.post("/algorithm-groups", status_code=status.HTTP_201_CREATED)
 def create_algorithm_group(
     payload: AlgorithmGroupCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmGroupDetailOut:
     """Create an algorithm group."""
     normalized = normalize_group_title(payload.title)
     existing = (
         session.execute(
             select(AlgorithmGroup).where(AlgorithmGroup.title_norm == normalized)
+            .where(AlgorithmGroup.user_id == current_user.id)
         )
         .scalars()
         .first()
@@ -131,6 +151,7 @@ def create_algorithm_group(
         )
 
     group = AlgorithmGroup(
+        user_id=current_user.id,
         title=payload.title.strip(),
         description=payload.description,
         notes=payload.notes,
@@ -154,9 +175,15 @@ def update_algorithm_group(
     group_id: int,
     payload: AlgorithmGroupUpdate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmGroupDetailOut:
     """Update an algorithm group."""
-    group = session.get(AlgorithmGroup, group_id)
+    group = session.execute(
+        select(AlgorithmGroup).where(
+            AlgorithmGroup.id == group_id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not group:
         raise HTTPException(
             status_code=404,
@@ -178,6 +205,7 @@ def update_algorithm_group(
                 select(AlgorithmGroup).where(
                     AlgorithmGroup.title_norm == normalized,
                     AlgorithmGroup.id != group_id,
+                    AlgorithmGroup.user_id == current_user.id,
                 )
             )
             .scalars()
@@ -198,7 +226,7 @@ def update_algorithm_group(
 
     session.commit()
     session.refresh(group)
-    return _build_group_detail(session, group)
+    return _build_group_detail(session, current_user, group)
 
 
 @router.post("/algorithm-groups/{group_id}/merge")
@@ -206,6 +234,7 @@ def merge_algorithm_group(
     group_id: int,
     payload: AlgorithmGroupMergePayload,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmGroupDetailOut:
     """Merge a source group into a target group."""
     if group_id == payload.target_group_id:
@@ -217,8 +246,18 @@ def merge_algorithm_group(
             },
         )
 
-    source = session.get(AlgorithmGroup, group_id)
-    target = session.get(AlgorithmGroup, payload.target_group_id)
+    source = session.execute(
+        select(AlgorithmGroup).where(
+            AlgorithmGroup.id == group_id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
+    target = session.execute(
+        select(AlgorithmGroup).where(
+            AlgorithmGroup.id == payload.target_group_id,
+            AlgorithmGroup.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not source or not target:
         raise HTTPException(
             status_code=404,
@@ -227,11 +266,14 @@ def merge_algorithm_group(
 
     session.execute(
         update(Algorithm)
-        .where(Algorithm.group_id == source.id)
+        .where(
+            Algorithm.group_id == source.id,
+            Algorithm.user_id == current_user.id,
+        )
         .values(group_id=target.id)
     )
     session.delete(source)
     session.commit()
 
     session.refresh(target)
-    return _build_group_detail(session, target)
+    return _build_group_detail(session, current_user, target)

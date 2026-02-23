@@ -1,8 +1,9 @@
 """Algorithm review attempt model."""
 
+import uuid
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studying_light.db.base import Base
@@ -14,6 +15,11 @@ class AlgorithmReviewAttempt(Base):
     __tablename__ = "algorithm_review_attempts"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+    )
     review_item_id: Mapped[int] = mapped_column(
         ForeignKey("algorithm_review_items.id"),
         index=True,

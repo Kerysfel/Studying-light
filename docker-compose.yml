@@ -3,9 +3,30 @@ services:
     build:
       context: .
       dockerfile: docker/DockerFile
-    env_file:
-      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?DATABASE_URL must be set}
+      IN_DOCKER: "1"
     ports:
       - "8000:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: studying_light
+      POSTGRES_USER: studying_light
+      POSTGRES_PASSWORD: studying_light
+    ports:
+      - "5432:5432"
     volumes:
-      - ./data:/data
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U studying_light -d studying_light"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:

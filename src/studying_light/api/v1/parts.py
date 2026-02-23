@@ -1,11 +1,13 @@
 """Reading part endpoints."""
 
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Body, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     ImportGptPayload,
     ImportGptResponse,
@@ -16,12 +18,56 @@ from studying_light.api.v1.schemas import (
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
+from studying_light.db.models.user import User
 from studying_light.db.models.user_settings import UserSettings
 from studying_light.db.session import get_session
+from studying_light.services.activity_tracker import record_reading_session
+from studying_light.services.gpt_json_parser import (
+    GptJsonParseError,
+    parse_gpt_json_output,
+)
+from studying_light.services.user_settings import DEFAULT_SETTINGS
 
 router: APIRouter = APIRouter()
 
-DEFAULT_INTERVALS: list[int] = [1, 7, 16, 35, 90]
+DEFAULT_INTERVALS: list[int] = DEFAULT_SETTINGS["intervals_days"]
+
+
+def _coerce_import_payload(payload: object) -> ImportGptPayload:
+    if isinstance(payload, str):
+        try:
+            payload = parse_gpt_json_output(payload)
+        except GptJsonParseError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": str(exc),
+                    "code": "INVALID_JSON_SYNTAX",
+                },
+            ) from exc
+
+    try:
+        return ImportGptPayload.model_validate(payload)
+    except ValidationError as exc:
+        formatted_errors = [
+            {
+                "loc": [str(item) for item in error.get("loc", ())],
+                "msg": error.get("msg", "Invalid value"),
+                "type": error.get("type", "value_error"),
+            }
+            for error in exc.errors()
+        ]
+        first_error = (
+            formatted_errors[0]["msg"] if formatted_errors else "Invalid payload"
+        )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "detail": first_error,
+                "code": "INVALID_JSON_SCHEMA",
+                "errors": formatted_errors,
+            },
+        ) from exc
 
 
 def _compute_pages_read(
@@ -80,9 +126,12 @@ def _build_review_item_out(
 def create_part(
     payload: ReadingPartCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ReadingPartOut:
     """Create a reading part."""
-    book = session.get(Book, payload.book_id)
+    book = session.execute(
+        select(Book).where(Book.id == payload.book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -93,7 +142,8 @@ def create_part(
     if part_index is None:
         max_index = session.execute(
             select(func.max(ReadingPart.part_index)).where(
-                ReadingPart.book_id == payload.book_id
+                ReadingPart.book_id == payload.book_id,
+                ReadingPart.user_id == current_user.id,
             )
         ).scalar()
         part_index = (max_index or 0) + 1
@@ -110,6 +160,7 @@ def create_part(
         )
 
     part = ReadingPart(
+        user_id=current_user.id,
         book_id=payload.book_id,
         part_index=part_index,
         label=payload.label,
@@ -119,6 +170,17 @@ def create_part(
         page_end=page_end_value,
     )
     session.add(part)
+    session.flush()
+    record_reading_session(
+        session,
+        user_id=current_user.id,
+        book_id=part.book_id,
+        reading_part_id=part.id,
+        ended_at=part.created_at or datetime.now(timezone.utc),
+        duration_sec=part.session_seconds,
+        pages_read=part.pages_read,
+        page_end=part.page_end,
+    )
     session.commit()
     session.refresh(part)
     return ReadingPartOut.model_validate(part)
@@ -128,6 +190,7 @@ def create_part(
 def list_parts(
     book_id: int | None = None,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[ReadingPartOut]:
     """List reading parts for a book."""
     if book_id is None:
@@ -140,6 +203,7 @@ def list_parts(
         session.execute(
             select(ReadingPart)
             .where(ReadingPart.book_id == book_id)
+            .where(ReadingPart.user_id == current_user.id)
             .order_by(ReadingPart.part_index)
         )
         .scalars()
@@ -151,25 +215,33 @@ def list_parts(
 @router.post("/parts/{part_id}/import_gpt")
 def import_gpt(
     part_id: int,
-    payload: ImportGptPayload,
+    payload: object = Body(...),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> ImportGptResponse:
     """Import GPT summary and questions for a reading part."""
-    part = session.get(ReadingPart, part_id)
+    part = session.execute(
+        select(ReadingPart).where(
+            ReadingPart.id == part_id,
+            ReadingPart.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not part:
         raise HTTPException(
             status_code=404,
             detail={"detail": "Reading part not found", "code": "NOT_FOUND"},
         )
 
-    part.gpt_summary = payload.gpt_summary
-    questions_by_interval = payload.gpt_questions_by_interval.root
+    import_payload = _coerce_import_payload(payload)
+    part.gpt_summary = import_payload.gpt_summary
+    questions_by_interval = import_payload.gpt_questions_by_interval.root
     part.gpt_questions_by_interval = questions_by_interval
 
     existing_items = (
         session.execute(
             select(ReviewScheduleItem).where(
-                ReviewScheduleItem.reading_part_id == part_id
+                ReviewScheduleItem.reading_part_id == part_id,
+                ReviewScheduleItem.user_id == current_user.id,
             )
         )
         .scalars()
@@ -178,14 +250,16 @@ def import_gpt(
     for item in existing_items:
         session.delete(item)
 
-    settings = session.get(UserSettings, 1)
+    settings = session.get(UserSettings, current_user.id)
     intervals = settings.intervals_days if settings and settings.intervals_days else []
     if not intervals:
         intervals = DEFAULT_INTERVALS
 
     base_date = part.created_at.date() if part.created_at else date.today()
     review_items: list[ReviewItemOut] = []
-    book = session.get(Book, part.book_id)
+    book = session.execute(
+        select(Book).where(Book.id == part.book_id, Book.user_id == current_user.id)
+    ).scalar_one_or_none()
     if not book:
         raise HTTPException(
             status_code=404,
@@ -207,8 +281,19 @@ def import_gpt(
         questions = questions_by_interval.get(interval_value)
         if questions is None:
             questions = questions_by_interval.get(str(interval_value))
+        if not questions:
+            raise HTTPException(
+                status_code=422,
+                detail={
+                    "detail": (
+                        f"Missing questions for interval {interval_value} days"
+                    ),
+                    "code": "INVALID_JSON_BUSINESS_RULES",
+                },
+            )
 
         item = ReviewScheduleItem(
+            user_id=current_user.id,
             reading_part_id=part.id,
             interval_days=interval_value,
             due_date=base_date + timedelta(days=interval_value),

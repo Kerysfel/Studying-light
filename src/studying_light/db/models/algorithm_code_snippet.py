@@ -1,8 +1,9 @@
 """Algorithm code snippet model."""
 
+import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text, Uuid, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studying_light.db.base import Base
@@ -14,6 +15,11 @@ class AlgorithmCodeSnippet(Base):
     __tablename__ = "algorithm_code_snippets"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+    )
     algorithm_id: Mapped[int] = mapped_column(
         ForeignKey("algorithms.id"),
         index=True,

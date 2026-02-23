@@ -50,3 +50,21 @@ export const formatDueDate = (value, { todayLabel = "Today" } = {}) => {
   });
   return formatter.format(parsed);
 };
+
+export const formatDateTime = (value) => {
+  if (!value) {
+    return "-";
+  }
+  const parsed = parseDateValue(value);
+  if (!parsed) {
+    return String(value);
+  }
+  const formatter = new Intl.DateTimeFormat("ru-RU", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+  return formatter.format(parsed);
+};

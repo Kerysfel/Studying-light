@@ -1,8 +1,9 @@
 """Review schedule item model."""
 
+import uuid
 from datetime import date, datetime
 
-from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String
+from sqlalchemy import JSON, Date, DateTime, ForeignKey, Integer, String, Uuid
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from studying_light.db.base import Base
@@ -14,6 +15,11 @@ class ReviewScheduleItem(Base):
     __tablename__ = "review_schedule_items"
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("users.id"),
+        index=True,
+    )
     reading_part_id: Mapped[int] = mapped_column(
         ForeignKey("reading_parts.id"),
         index=True,

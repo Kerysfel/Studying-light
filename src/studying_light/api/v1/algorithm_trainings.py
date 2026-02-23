@@ -1,21 +1,26 @@
 """Algorithm training endpoints."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.api.v1.schemas import (
     AlgorithmTrainingAttemptOut,
     AlgorithmTrainingCreate,
 )
 from studying_light.db.models.algorithm import Algorithm
 from studying_light.db.models.algorithm_training_attempt import AlgorithmTrainingAttempt
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
+from studying_light.services.activity_tracker import record_algorithm_training
 
 router: APIRouter = APIRouter()
 
 
-def _build_training_out(attempt: AlgorithmTrainingAttempt) -> AlgorithmTrainingAttemptOut:
+def _build_training_out(
+    attempt: AlgorithmTrainingAttempt,
+) -> AlgorithmTrainingAttemptOut:
     return AlgorithmTrainingAttemptOut(
         id=attempt.id,
         algorithm_id=attempt.algorithm_id,
@@ -33,9 +38,15 @@ def _build_training_out(attempt: AlgorithmTrainingAttempt) -> AlgorithmTrainingA
 def create_algorithm_training(
     payload: AlgorithmTrainingCreate,
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> AlgorithmTrainingAttemptOut:
     """Create a training attempt for an algorithm."""
-    algorithm = session.get(Algorithm, payload.algorithm_id)
+    algorithm = session.execute(
+        select(Algorithm).where(
+            Algorithm.id == payload.algorithm_id,
+            Algorithm.user_id == current_user.id,
+        )
+    ).scalar_one_or_none()
     if not algorithm:
         raise HTTPException(
             status_code=404,
@@ -54,6 +65,7 @@ def create_algorithm_training(
     )
 
     attempt = AlgorithmTrainingAttempt(
+        user_id=current_user.id,
         algorithm_id=payload.algorithm_id,
         mode=payload.mode,
         code_text=payload.code_text,
@@ -63,6 +75,19 @@ def create_algorithm_training(
         duration_sec=payload.duration_sec,
     )
     session.add(attempt)
+    session.flush()
+    record_algorithm_training(
+        session,
+        user_id=current_user.id,
+        algorithm_id=attempt.algorithm_id,
+        algorithm_training_attempt_id=attempt.id,
+        mode=attempt.mode,
+        started_at=attempt.created_at,
+        ended_at=attempt.created_at,
+        duration_sec=attempt.duration_sec,
+        accuracy=attempt.accuracy,
+        rating_1_to_5=attempt.rating_1_to_5,
+    )
     session.commit()
     session.refresh(attempt)
 
@@ -72,7 +97,9 @@ def create_algorithm_training(
 @router.get("/algorithm-trainings")
 def list_algorithm_trainings(
     algorithm_id: int | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
     session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
 ) -> list[AlgorithmTrainingAttemptOut]:
     """List training attempts for an algorithm."""
     if algorithm_id is None:
@@ -84,8 +111,15 @@ def list_algorithm_trainings(
     rows = (
         session.execute(
             select(AlgorithmTrainingAttempt)
-            .where(AlgorithmTrainingAttempt.algorithm_id == algorithm_id)
-            .order_by(AlgorithmTrainingAttempt.created_at.desc())
+            .where(
+                AlgorithmTrainingAttempt.algorithm_id == algorithm_id,
+                AlgorithmTrainingAttempt.user_id == current_user.id,
+            )
+            .order_by(
+                AlgorithmTrainingAttempt.created_at.desc(),
+                AlgorithmTrainingAttempt.id.desc(),
+            )
+            .limit(limit)
         )
         .scalars()
         .all()

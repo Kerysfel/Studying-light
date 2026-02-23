@@ -23,6 +23,11 @@ app.mount(
     StaticFiles(directory=STATIC_DIR / "assets", check_dir=False),
     name="assets",
 )
+app.mount(
+    "/landing",
+    StaticFiles(directory=STATIC_DIR / "landing", check_dir=False),
+    name="landing",
+)
 
 
 @app.get("/", include_in_schema=False)
@@ -82,12 +87,12 @@ def handle_validation_error(
             }
         )
     if has_json_error:
-        detail = "Invalid JSON body"
-        code = "INVALID_JSON_BODY"
+        detail = "Invalid JSON syntax"
+        code = "INVALID_JSON_SYNTAX"
     else:
         detail = "Validation error"
         if request.url.path.endswith("/import_gpt"):
-            code = "IMPORT_PAYLOAD_INVALID"
+            code = "INVALID_JSON_SCHEMA"
         else:
             code = "VALIDATION_ERROR"
     return JSONResponse(

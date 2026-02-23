@@ -21,7 +21,7 @@ Studying Light — легкий помощник для чтения и повт
 - Импорт JSON от GPT (сводка и вопросы).
 - Повторения с сохранением GPT-оценки (JSON).
 - Экспорт CSV/ZIP.
-- SQLite + утилита бэкапа (`make backup`).
+- Postgres + Alembic миграции.
 
 В разработке:
 
@@ -51,6 +51,20 @@ Studying Light — легкий помощник для чтения и повт
 
 ![Review](docs/screenshots/05-review.png)
 
+### Скриншоты для публичного лендинга
+
+Хранятся в `frontend/public/landing/*`.
+
+- `landing_dashboard.png` — Dashboard / Today
+- `landing_session.png` — Session / Pomodoro
+- `landing_reviews.png` — Reviews list
+- `landing_review_detail.png` — Review detail
+- `landing_import.png` — Import JSON
+- `landing_export.png` — Export CSV/ZIP
+- `landing_auth_login.png` — Auth / login
+- `landing_auth_register.png` — Auth / register
+- `landing_admin_users.png` — Admin users/reset queue (optional)
+
 ## Документация
 
 - Архитектура — как устроено: `docs/specs/architecture.md`
@@ -63,15 +77,10 @@ Studying Light — легкий помощник для чтения и повт
 
 ```bash
 cp .env.example .env
+docker compose up --build
 ```
 
-При необходимости отредактируйте `.env`, затем:
-
-```bash
-docker compose --env-file .env up --build
-```
-
-Данные SQLite сохраняются в `./data` и не теряются при перезапусках.
+Данные Postgres сохраняются в volume `postgres_data`.
 
 Откройте `http://localhost:8000` (фронт и API).
 
@@ -79,13 +88,32 @@ docker compose --env-file .env up --build
 
 ```bash
 uv sync --extra dev
-uv run alembic upgrade head
+DATABASE_URL=postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light docker compose up -d postgres
+DATABASE_URL=postgresql+psycopg://studying_light:studying_light@localhost:5432/studying_light uv run alembic upgrade head
 uv run uvicorn studying_light.main:app --reload
 ```
 
 Откройте `http://localhost:8000`.
 
-По умолчанию данные лежат в `data/app.db`.
+Для локального запуска задайте `DATABASE_URL` на ваш Postgres.
+
+## Аутентификация
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/register \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"strongpass123"}'
+```
+
+Новый пользователь создается с `is_active=false`. Для входа нужна активация администратором.
+
+```bash
+curl -X POST http://localhost:8000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"user@example.com","password":"strongpass123"}'
+```
+
+Только access token (JWT). Refresh token не реализован.
 
 Необязательный dev-сервер фронтенда:
 
@@ -180,13 +208,11 @@ curl http://localhost:8000/api/v1/today
 
 | Переменная | По умолчанию       | Примечания                                                   |
 | ---------- | ------------------ | ------------------------------------------------------------ |
-| `APP_ENV`  | `local`            | Метка окружения.                                             |
-| `DB_PATH`  | `/data/app.db`     | Значение для Docker. Если локально не задано, то `data/app.db`. |
+| `APP_ENV`  | `docker`           | Метка окружения (`docker`/`local`). |
+| `DATABASE_URL` | `postgresql+psycopg://studying_light:studying_light@postgres:5432/studying_light` | Основной URL базы данных. В Docker обязателен. |
+| `JWT_SECRET` | `change-me` | Секрет подписи JWT access token. |
+| `JWT_ACCESS_TOKEN_EXPIRES_MINUTES` | `60` | Срок жизни access token в минутах. |
 | `TZ`       | `Europe/Amsterdam` | Часовой пояс контейнера.                                     |
-
-Необязательно:
-
-- `DATABASE_URL`: переопределяет `DB_PATH`, если задана.
 
 ## Статус проекта
 

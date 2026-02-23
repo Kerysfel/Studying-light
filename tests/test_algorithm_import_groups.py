@@ -41,28 +41,41 @@ def _build_payload(
     }
 
 
-def test_import_with_existing_group_id(client) -> None:
+def test_import_with_existing_group_id(client, auth_headers: dict[str, str]) -> None:
     group_response = client.post(
         "/api/v1/algorithm-groups",
         json={"title": "Graphs"},
+        headers=auth_headers,
     )
     assert group_response.status_code == 201
     group_id = group_response.json()["id"]
 
     payload = _build_payload(algorithm_title="BFS", group_id=group_id)
-    response = client.post("/api/v1/algorithms/import", json=payload)
+    response = client.post(
+        "/api/v1/algorithms/import",
+        json=payload,
+        headers=auth_headers,
+    )
     assert response.status_code == 201
     response_payload = response.json()
     assert response_payload["groups_created"] == 0
     assert response_payload["algorithms_created"][0]["group_id"] == group_id
 
 
-def test_import_with_new_title_reuses_group(client, session) -> None:
+def test_import_with_new_title_reuses_group(
+    client,
+    session,
+    auth_headers: dict[str, str],
+) -> None:
     first_payload = _build_payload(
         algorithm_title="BFS",
         group_title_new="  Graphs  ",
     )
-    first_response = client.post("/api/v1/algorithms/import", json=first_payload)
+    first_response = client.post(
+        "/api/v1/algorithms/import",
+        json=first_payload,
+        headers=auth_headers,
+    )
     assert first_response.status_code == 201
     assert first_response.json()["groups_created"] == 1
 
@@ -70,7 +83,11 @@ def test_import_with_new_title_reuses_group(client, session) -> None:
         algorithm_title="DFS",
         group_title_new="graphs",
     )
-    second_response = client.post("/api/v1/algorithms/import", json=second_payload)
+    second_response = client.post(
+        "/api/v1/algorithms/import",
+        json=second_payload,
+        headers=auth_headers,
+    )
     assert second_response.status_code == 201
     assert second_response.json()["groups_created"] == 0
 

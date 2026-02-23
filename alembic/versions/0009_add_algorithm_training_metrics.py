@@ -23,7 +23,7 @@ def upgrade() -> None:
                 "mode",
                 sa.String(length=16),
                 nullable=False,
-                server_default="memory",
+                server_default=sa.text("'memory'"),
             )
         )
         batch.add_column(sa.Column("accuracy", sa.Float(), nullable=True))

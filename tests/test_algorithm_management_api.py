@@ -7,8 +7,12 @@ from sqlalchemy.orm import Session
 from studying_light.db.models.algorithm import Algorithm
 
 
-def _create_book_and_part(client: TestClient) -> int:
-    book_response = client.post("/api/v1/books", json={"title": "Test Book"})
+def _create_book_and_part(client: TestClient, headers: dict[str, str]) -> int:
+    book_response = client.post(
+        "/api/v1/books",
+        json={"title": "Test Book"},
+        headers=headers,
+    )
     assert book_response.status_code == 201
     book_id = book_response.json()["id"]
 
@@ -16,13 +20,14 @@ def _create_book_and_part(client: TestClient) -> int:
         "book_id": book_id,
         "label": "Part 1",
     }
-    part_response = client.post("/api/v1/parts", json=part_payload)
+    part_response = client.post("/api/v1/parts", json=part_payload, headers=headers)
     assert part_response.status_code == 201
     return part_response.json()["id"]
 
 
 def _import_algorithm(
     client: TestClient,
+    headers: dict[str, str],
     *,
     group_id: int,
     algorithm_title: str,
@@ -56,13 +61,14 @@ def _import_algorithm(
             }
         ],
     }
-    response = client.post("/api/v1/algorithms/import", json=payload)
+    response = client.post("/api/v1/algorithms/import", json=payload, headers=headers)
     assert response.status_code == 201
 
 
 def test_algorithm_group_list_and_detail(
     client: TestClient,
     session: Session,
+    auth_headers: dict[str, str],
 ) -> None:
     group_response = client.post(
         "/api/v1/algorithm-groups",
@@ -71,13 +77,15 @@ def test_algorithm_group_list_and_detail(
             "description": "Graph algorithms",
             "notes": "Core topics",
         },
+        headers=auth_headers,
     )
     assert group_response.status_code == 201
     group_id = group_response.json()["id"]
 
-    part_id = _create_book_and_part(client)
+    part_id = _create_book_and_part(client, auth_headers)
     _import_algorithm(
         client,
+        auth_headers,
         group_id=group_id,
         algorithm_title="BFS",
         source_part_id=part_id,
@@ -86,6 +94,7 @@ def test_algorithm_group_list_and_detail(
     list_response = client.get(
         "/api/v1/algorithm-groups",
         params={"query": "graph"},
+        headers=auth_headers,
     )
     assert list_response.status_code == 200
     list_payload = list_response.json()
@@ -93,7 +102,10 @@ def test_algorithm_group_list_and_detail(
     assert list_payload[0]["title"] == "Graphs"
     assert list_payload[0]["algorithms_count"] == 1
 
-    detail_response = client.get(f"/api/v1/algorithm-groups/{group_id}")
+    detail_response = client.get(
+        f"/api/v1/algorithm-groups/{group_id}",
+        headers=auth_headers,
+    )
     assert detail_response.status_code == 200
     detail_payload = detail_response.json()
     assert detail_payload["title"] == "Graphs"
@@ -104,6 +116,7 @@ def test_algorithm_group_list_and_detail(
 def test_algorithm_list_and_detail(
     client: TestClient,
     session: Session,
+    auth_headers: dict[str, str],
 ) -> None:
     group_response = client.post(
         "/api/v1/algorithm-groups",
@@ -112,13 +125,15 @@ def test_algorithm_list_and_detail(
             "description": "Tree algorithms",
             "notes": "Traversal",
         },
+        headers=auth_headers,
     )
     assert group_response.status_code == 201
     group_id = group_response.json()["id"]
 
-    part_id = _create_book_and_part(client)
+    part_id = _create_book_and_part(client, auth_headers)
     _import_algorithm(
         client,
+        auth_headers,
         group_id=group_id,
         algorithm_title="DFS",
         source_part_id=part_id,
@@ -131,6 +146,7 @@ def test_algorithm_list_and_detail(
     list_response = client.get(
         "/api/v1/algorithms",
         params={"group_id": group_id},
+        headers=auth_headers,
     )
     assert list_response.status_code == 200
     list_payload = list_response.json()
@@ -138,7 +154,10 @@ def test_algorithm_list_and_detail(
     assert list_payload[0]["group_title"] == "Trees"
     assert list_payload[0]["review_items_count"] == 5
 
-    detail_response = client.get(f"/api/v1/algorithms/{algorithm.id}")
+    detail_response = client.get(
+        f"/api/v1/algorithms/{algorithm.id}",
+        headers=auth_headers,
+    )
     assert detail_response.status_code == 200
     detail_payload = detail_response.json()
     assert detail_payload["group_title"] == "Trees"

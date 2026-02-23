@@ -11,9 +11,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from studying_light.api.v1.deps import get_current_user
 from studying_light.db.models.book import Book
 from studying_light.db.models.reading_part import ReadingPart
 from studying_light.db.models.review_schedule_item import ReviewScheduleItem
+from studying_light.db.models.user import User
 from studying_light.db.session import get_session
 
 router: APIRouter = APIRouter()
@@ -63,9 +65,15 @@ def _build_csv(rows: list[dict[str, object]]) -> str:
     return buffer.getvalue()
 
 
-def _collect_rows(session: Session) -> list[dict[str, object]]:
+def _collect_rows(session: Session, user: User) -> list[dict[str, object]]:
     rows: list[dict[str, object]] = []
-    books = session.execute(select(Book).order_by(Book.id)).scalars().all()
+    books = (
+        session.execute(
+            select(Book).where(Book.user_id == user.id).order_by(Book.id)
+        )
+        .scalars()
+        .all()
+    )
     for book in books:
         rows.append(
             {
@@ -79,7 +87,13 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
         )
 
     parts = (
-        session.execute(select(ReadingPart).order_by(ReadingPart.id)).scalars().all()
+        session.execute(
+            select(ReadingPart)
+            .where(ReadingPart.user_id == user.id)
+            .order_by(ReadingPart.id)
+        )
+        .scalars()
+        .all()
     )
     for part in parts:
         rows.append(
@@ -100,7 +114,11 @@ def _collect_rows(session: Session) -> list[dict[str, object]]:
         )
 
     reviews = (
-        session.execute(select(ReviewScheduleItem).order_by(ReviewScheduleItem.id))
+        session.execute(
+            select(ReviewScheduleItem)
+            .where(ReviewScheduleItem.user_id == user.id)
+            .order_by(ReviewScheduleItem.id)
+        )
         .scalars()
         .all()
     )
@@ -131,9 +149,12 @@ def _build_table_csv(rows: list[dict[str, object]], columns: list[str]) -> str:
 
 
 @router.get("/export.csv")
-def export_csv(session: Session = Depends(get_session)) -> StreamingResponse:
+def export_csv(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
     """Export data as a single CSV."""
-    rows = _collect_rows(session)
+    rows = _collect_rows(session, current_user)
     csv_text = _build_csv(rows)
     data = csv_text.encode("utf-8")
     headers = {"Content-Disposition": "attachment; filename=export.csv"}
@@ -145,14 +166,33 @@ def export_csv(session: Session = Depends(get_session)) -> StreamingResponse:
 
 
 @router.get("/export.zip")
-def export_zip(session: Session = Depends(get_session)) -> StreamingResponse:
+def export_zip(
+    session: Session = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> StreamingResponse:
     """Export data as a ZIP archive with CSV files."""
-    books = session.execute(select(Book).order_by(Book.id)).scalars().all()
+    books = (
+        session.execute(
+            select(Book).where(Book.user_id == current_user.id).order_by(Book.id)
+        )
+        .scalars()
+        .all()
+    )
     parts = (
-        session.execute(select(ReadingPart).order_by(ReadingPart.id)).scalars().all()
+        session.execute(
+            select(ReadingPart)
+            .where(ReadingPart.user_id == current_user.id)
+            .order_by(ReadingPart.id)
+        )
+        .scalars()
+        .all()
     )
     reviews = (
-        session.execute(select(ReviewScheduleItem).order_by(ReviewScheduleItem.id))
+        session.execute(
+            select(ReviewScheduleItem)
+            .where(ReviewScheduleItem.user_id == current_user.id)
+            .order_by(ReviewScheduleItem.id)
+        )
         .scalars()
         .all()
     )
